@@ -9,6 +9,7 @@ import os
 from processing_function.file_detector import detect_file_type
 from processing_function.text_extractors.email_extractor import extract as extract_email
 from processing_function.metadata_extractor import extract_metadata
+from processing_function.risk_analyst_agent import analyze_risk
 from processing_function.output_generator import generate_output_json
 from processing_function.storage_manager import save_to_local_file
 from processing_function import monitoring
@@ -75,7 +76,10 @@ def process_document(file_path, output_dir):
         # Step 3: Extract metadata
         metadata = extract_metadata(extracted_text, file_type, extraction_result)
         
-        # Step 4: Generate output JSON
+        # Step 4: Analyze risk using Amazon Bedrock Nova Lite
+        risk_assessment = analyze_risk(extracted_text, metadata)
+        
+        # Step 5: Generate output JSON
         output_json = generate_output_json(
             case_id=case_id,
             document_s3_key=file_path,  # Will be S3 URI in Phase 3
@@ -84,7 +88,10 @@ def process_document(file_path, output_dir):
             status="processed"
         )
         
-        # Step 5: Save to storage
+        # Add risk assessment to output
+        output_json["risk_assessment"] = risk_assessment
+        
+        # Step 6: Save to storage
         filename = f"{case_id}.json"
         save_result = save_to_local_file(output_dir, filename, output_json)
         
