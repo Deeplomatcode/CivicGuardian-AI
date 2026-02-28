@@ -1,0 +1,7 @@
+Metadata-Version: 2.4
+Name: civicguardian
+Version: 0.1.0
+Requires-Dist: boto3>=1.28.0
+Requires-Dist: pytest>=7.0.0
+Requires-Dist: hypothesis>=6.0.0
+Dynamic: requires-dist

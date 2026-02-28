@@ -180,10 +180,11 @@ def _parse_bedrock_response(response_text):
             if field not in risk_data:
                 risk_data[field] = _get_default_value(field)
         
-        # Validate risk_level
-        valid_levels = ["LOW", "MEDIUM", "HIGH", "CRITICAL", "UNKNOWN"]
-        if risk_data["risk_level"] not in valid_levels:
-            risk_data["risk_level"] = "MEDIUM"
+        valid_levels = {"LOW", "MEDIUM", "HIGH", "CRITICAL"}
+        rl = str(risk_data.get("risk_level", "MEDIUM")).upper()
+        if rl not in valid_levels:
+            rl = "MEDIUM"
+            risk_data["risk_level"] = rl
         
         # Validate confidence_score
         if not isinstance(risk_data["confidence_score"], (int, float)):
