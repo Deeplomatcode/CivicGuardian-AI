@@ -1,0 +1,35 @@
+flowchart TD
+    Start([Document Upload]) --> FileDetect[File Detector]
+    FileDetect --> MetaExtract[Metadata Extractor]
+    MetaExtract --> TextExtract[Text Extraction<br/>PDF/Email/Audio]
+    
+    TextExtract --> RiskAnalyst[Risk Analyst Agent<br/>Amazon Nova Lite]
+    style RiskAnalyst fill:#90EE90
+    
+    RiskAnalyst --> RiskDecision{Risk Level?}
+    
+    RiskDecision -->|LOW/UNKNOWN| SkipPolicy[Skip Policy Reasoning]
+    SkipPolicy --> OutputLow[JSON Output]
+    OutputLow --> StoreLow[(DynamoDB Storage)]
+    
+    RiskDecision -->|MEDIUM/HIGH/CRITICAL| PolicyReasoner[Policy Reasoner Agent<br/>Amazon Nova Pro]
+    style PolicyReasoner fill:#90EE90
+    
+    PolicyReasoner --> Governor[Governor Validation<br/>Pure Python]
+    
+    Governor --> ValidationDecision{Validation Status?}
+    
+    ValidationDecision -->|APPROVED<br/>+ LOW/MED Risk| StoreApproved[(DynamoDB Storage)]
+    
+    ValidationDecision -->|FLAGGED| ReviewQueue[Review Queue]
+    ReviewQueue --> ManualReview[Manual Review Required]
+    
+    ValidationDecision -->|VETOED or<br/>HIGH/CRITICAL Risk| SNSAlert[SNS Alert<br/>Human Escalation]
+    style SNSAlert fill:#FFB6C1
+    
+    SNSAlert --> HumanReview[Human Review Required]
+    
+    StoreApproved --> End([Complete])
+    StoreLow --> End
+    ManualReview --> End
+    HumanReview --> End
