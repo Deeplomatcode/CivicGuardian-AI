@@ -438,12 +438,14 @@ Partner with 2-3 UK local authorities to pilot with 50 vulnerable adults:
 
 ## Try It Yourself
 
-**GitHub Repository:** [Will add link]  
+**GitHub Repository:** [CivicGuardian-AI](https://github.com/Deeplomatcode/CivicGuardian-AI)  
+*Full source code, documentation, and development history available for review.*
+
 **Demo Video:** [Will add link]
 
 **To run locally:**
 ```bash
-git clone [repo]
+git clone https://github.com/Deeplomatcode/CivicGuardian-AI.git
 cd CivicGuardian-AI
 python3 demo_phase1.py sample_email.txt
 ```
