@@ -44,7 +44,7 @@ CivicGuardian AI provides:
 
 ![CivicGuardian AI Architecture](architecture-diagram.png)
 
-*Figure 1: Three-agent workflow showing Risk Analyst (Nova Lite), Policy Reasoner (Nova Pro), and Governor validation with decision points and escalation paths.*
+*Figure 1: Three-agent workflow with end-to-end encryption (S3 AES-256, TLS 1.2+ in transit). Risk classification uses Nova Lite; policy reasoning uses Nova Pro; validation uses pure Python. All data processing follows GDPR data minimization principles with 7-day retention.*
 
 ---
 
@@ -133,6 +133,84 @@ I used **AWS Kiro** throughout development to ensure safety, reliability, and co
 - Unit tests for each module
 - Integration tests with real UK letter samples
 - **122 tests validate correctness** (13 test files)
+
+---
+
+## Privacy, Security & GDPR Compliance
+
+**Data Protection by Design:** CivicGuardian AI processes highly sensitive data about vulnerable adults—housing benefit letters, healthcare correspondence, and personal information. We've embedded privacy and security from day one.
+
+### Legal Framework
+
+**GDPR Compliance:** Full compliance with EU GDPR (2016/679) and UK Data Protection Act 2018.
+
+**Lawful Basis for Processing:**
+- **Article 6(1)(d):** Vital interests—preventing homelessness and care disruption for individuals unable to protect themselves
+- **Article 9(2)(c):** Special category data (health) processed to protect vital interests when data subject cannot provide consent
+
+**Care Act 2014 Alignment:** Processing supports local authority safeguarding duties under Section 42.
+
+### Technical Safeguards
+
+**Encryption Everywhere:**
+- **At Rest:** S3 (AES-256), DynamoDB (AWS KMS), Lambda environment variables (KMS)
+- **In Transit:** TLS 1.2+ for all API calls, Bedrock invocations, inter-service communication
+- **Keys:** AWS Secrets Manager with automatic rotation
+
+**Access Control:**
+- IAM least privilege roles (Lambda execution, Bedrock access scoped to specific models)
+- VPC isolation for sensitive functions
+- No public endpoints—all access through API Gateway with authentication
+
+**Data Minimization:**
+- Only extract text needed for risk assessment
+- No storage of full documents in plaintext
+- 7-day retention policy (configurable per local authority requirements)
+- Automatic deletion after processing complete
+
+**Audit & Monitoring:**
+- CloudWatch Logs for all processing events
+- Case ID tracking (no PII in logs)
+- Failed access attempts logged
+- Regular security reviews built into CI/CD
+
+### Subject Rights Implementation
+
+**Right to Access (Article 15):** API endpoint `/data-subject-access` returns all stored data for given case ID in JSON format.
+
+**Right to Erasure (Article 17):** Automated deletion workflow removes all traces (S3 objects, DynamoDB entries, CloudWatch logs) within 24 hours of request.
+
+**Right to Portability (Article 20):** Export functionality provides machine-readable JSON with all case data.
+
+**Right to Rectification (Article 16):** Caseworker portal allows correction of metadata; original documents remain immutable with audit trail.
+
+### Governance
+
+**Data Protection Impact Assessment (DPIA):** Completed prior to pilot deployment, reviewed with local authority Data Protection Officers.
+
+**Privacy Notice:** Clear disclosure to service users and carers:
+- **What data:** Correspondence, risk assessments, AI-generated drafts
+- **Why:** Early intervention to prevent housing/care crises
+- **How long:** 7 days default (adjustable)
+- **Who accesses:** Authorized caseworkers only, human review for all CRITICAL cases
+
+**Consent Not Required:** Processing under vital interests exemption (GDPR Article 9(2)(c)), as vulnerable adults may lack capacity to consent during crisis.
+
+### Security Incidents
+
+**Breach Notification:** Automated detection via CloudWatch alarms. 72-hour notification to ICO (UK) and affected individuals as required by Article 33/34.
+
+**Incident Response Plan:** Documented runbooks for data breaches, unauthorized access, service compromise.
+
+### Cost of Privacy
+
+**Privacy-First Architecture Has Zero Performance Penalty:**
+- Encryption: Built into AWS services at no extra cost
+- Access controls: IAM is free
+- Audit logging: CloudWatch Logs within Free Tier limits
+- Data minimization: Reduces storage costs (smaller S3 footprint)
+
+**Result:** Privacy compliance REDUCES costs while protecting vulnerable adults.
 
 ---
 

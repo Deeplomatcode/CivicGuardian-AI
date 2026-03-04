@@ -49,6 +49,18 @@ Multi-agent serverless Guardian Loop:
 - `specs/requirements.md` - 20 detailed requirements with acceptance criteria
 - `specs/design.md` - Complete system architecture, Lambda pseudocode, testing strategy
 
+## Privacy & GDPR Compliance
+
+CivicGuardian AI processes sensitive data about vulnerable adults with full GDPR compliance:
+
+- **Legal Basis:** Article 6(1)(d) vital interests + Article 9(2)(c) special category health data
+- **Encryption:** AES-256 at rest (S3, DynamoDB), TLS 1.2+ in transit
+- **Data Minimization:** 7-day retention policy, no unnecessary PII storage
+- **Subject Rights:** Access, erasure, portability, rectification via API
+- **Governance:** DPIA template prepared, privacy notice drafted for pilot partners
+
+See `article/GDPR_COMPLIANCE_CHECKLIST.md` for complete compliance documentation.
+
 ## Next Steps
 1. Implement Lambda functions (Kiro-assisted)
 2. Create DynamoDB schemas
