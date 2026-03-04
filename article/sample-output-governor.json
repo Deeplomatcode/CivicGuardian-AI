@@ -1,0 +1,15 @@
+{
+  "validation_status": "APPROVED",
+  "confidence_score": 0.82,
+  "grounding_check": {
+    "citations_valid": true,
+    "hallucination_detected": false
+  },
+  "safety_check": {
+    "contains_draft_notice": true,
+    "no_definitive_claims": true
+  },
+  "issues_found": [],
+  "approved": true,
+  "required_escalation": false
+}

@@ -1,0 +1,13 @@
+{
+  "case_id": "demo-001",
+  "risk_level": "MEDIUM",
+  "confidence": 0.87,
+  "deadline": "2026-03-18",
+  "required_action": "Respond to housing benefit review within 14 days",
+  "urgency_indicators": [
+    "deadline mentioned",
+    "benefit review",
+    "14 day response window"
+  ],
+  "sender_authority": "Local Housing Authority"
+}

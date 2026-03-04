@@ -1,0 +1,23 @@
+{
+  "skipped": false,
+  "reason": "",
+  "risk_level": "MEDIUM",
+  "draft_response": "Dear Housing Officer,\n\nI am writing in response to your housing benefit review letter dated March 4, 2026. I confirm my continued eligibility and request clarification on the required documentation.\n\nPlease advise which documents you need to complete the review. I am committed to providing all necessary information within the 14-day timeframe.\n\nThank you for your assistance.",
+  "rationale_bullets": [
+    "Acknowledges the review deadline",
+    "Confirms engagement with process",
+    "Requests specific documentation requirements",
+    "Demonstrates proactive compliance"
+  ],
+  "citations": [
+    {
+      "quote": "housing benefit review",
+      "relevance": "Confirms subject matter from original letter"
+    }
+  ],
+  "legislation_referenced": [
+    "Housing Benefit Regulations 2006"
+  ],
+  "confidence": 0.82,
+  "safety_notice": "DRAFT FOR REVIEW - Not legal advice"
+}
