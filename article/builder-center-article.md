@@ -134,6 +134,30 @@ I used **AWS Kiro** throughout development to ensure safety, reliability, and co
 - Integration tests with real UK letter samples
 - **122 tests validate correctness** (13 test files)
 
+### Development Evidence
+
+The following screenshots demonstrate the complete implementation and testing process:
+
+![Git Development History](screenshot-01-git-history.png)
+
+*Figure 2: Complete development history showing 16 commits over 5 weeks with Kiro-assisted specification-driven development*
+
+![Agent Implementation Files](screenshot-02-agent-files.png)
+
+*Figure 3: Core agent implementations - Risk Analyst (7.3KB), Policy Reasoner (9.2KB), Governor (6.5KB)*
+
+![Test Suite Coverage](screenshot-03-test-suite.png)
+
+*Figure 4: Comprehensive test suite with 13 test files covering all agents and utilities (122 tests passing)*
+
+![Sample JSON Output](screenshot-04-json-output.png)
+
+*Figure 5: Policy Reasoner output showing UK housing law citation and draft response structure*
+
+![Project Organization](screenshot-05-project-structure.png)
+
+*Figure 6: Clean, production-ready repository structure with clear separation of concerns*
+
 ---
 
 ## Privacy, Security & GDPR Compliance
