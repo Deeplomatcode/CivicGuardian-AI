@@ -1,15 +1,26 @@
 """
-Governor Agent - Validation and approval logic for policy responses.
+Governor Validation Agent - Pure Python validation layer for policy responses.
 
 This module provides validation functions to verify policy responses from the
 Policy Reasoner Agent, including grounding checks, safety validation, confidence
 scoring, and approval/escalation logic.
+
+No AWS/boto3 dependencies - pure Python validation logic.
 """
 
 from typing import Dict, List, Any
 
 
 REQUIRED_SAFETY_NOTICE = "DRAFT FOR REVIEW - Not legal advice"
+
+PROHIBITED_PHRASES = [
+    "legally required",
+    "you are legally required",
+    "this guarantees",
+    "certainly",
+    "will be upheld",
+    "must comply"
+]
 
 
 def validate_policy_response(
@@ -28,277 +39,171 @@ def validate_policy_response(
     Returns:
         dict: Validation result with structure:
             {
+                "validation_status": str,  # "APPROVED" or "FLAGGED" or "VETOED"
+                "confidence_score": float,  # 0.0 to 1.0
+                "grounding_check": {
+                    "citations_valid": bool,
+                    "hallucination_detected": bool
+                },
+                "safety_check": {
+                    "contains_draft_notice": bool,
+                    "no_definitive_claims": bool
+                },
+                "issues_found": list[str],
                 "approved": bool,
-                "validation_passed": bool,
-                "grounding_check": dict,
-                "safety_check": dict,
-                "confidence_check": dict,
-                "escalation_required": bool,
-                "escalation_reason": str or None,
-                "validation_errors": list[str]
+                "required_escalation": bool
             }
     """
-    validation_errors = []
+    issues_found = []
     
-    # Run all validation checks
-    grounding_result = _check_grounding(policy_output, source_text)
-    safety_result = _check_safety_notice(policy_output)
-    confidence_result = _check_confidence(policy_output, original_risk_data)
+    # 1. GROUNDING CHECK
+    grounding_result = _check_grounding(policy_output, source_text, issues_found)
+    citations_valid = grounding_result["citations_valid"]
+    hallucination_detected = grounding_result["hallucination_detected"]
     
-    # Collect errors
-    if not grounding_result["passed"]:
-        validation_errors.extend(grounding_result["errors"])
-    if not safety_result["passed"]:
-        validation_errors.append(safety_result["error"])
-    if not confidence_result["passed"]:
-        validation_errors.append(confidence_result["error"])
+    # 2. SAFETY CHECK
+    safety_result = _check_safety(policy_output, issues_found)
+    contains_draft_notice = safety_result["contains_draft_notice"]
+    no_definitive_claims = safety_result["no_definitive_claims"]
     
-    # Determine if validation passed
-    validation_passed = (
-        grounding_result["passed"] and
-        safety_result["passed"] and
-        confidence_result["passed"]
-    )
+    # 3. CONFIDENCE SCORING
+    confidence_score = policy_output.get("confidence", 0.0)
     
-    # Determine approval and escalation
-    approval_result = _determine_approval(
-        validation_passed,
-        policy_output,
-        original_risk_data,
-        grounding_result,
-        confidence_result
+    if hallucination_detected:
+        confidence_score -= 0.2
+        if "Hallucination detected" not in issues_found:
+            issues_found.append("Hallucination detected")
+    
+    if not contains_draft_notice:
+        confidence_score -= 0.1
+    
+    if not no_definitive_claims:
+        confidence_score -= 0.15
+    
+    # Clamp to [0.0, 1.0]
+    confidence_score = max(0.0, min(1.0, confidence_score))
+    
+    # 4. APPROVAL LOGIC
+    # Check confidence threshold BEFORE degradation for VETOED vs FLAGGED distinction
+    original_confidence = policy_output.get("confidence", 0.0)
+    
+    if hallucination_detected or original_confidence < 0.75:
+        validation_status = "VETOED"
+        approved = False
+        if confidence_score < 0.75 and "Confidence below threshold (0.75)" not in issues_found:
+            issues_found.append("Confidence below threshold (0.75)")
+    elif not contains_draft_notice or not no_definitive_claims:
+        validation_status = "FLAGGED"
+        approved = False
+    else:
+        validation_status = "APPROVED"
+        approved = True
+    
+    # 5. ESCALATION LOGIC
+    original_risk_level = original_risk_data.get("risk_level", "UNKNOWN")
+    required_escalation = (
+        original_risk_level in ["HIGH", "CRITICAL"] or
+        validation_status == "VETOED"
     )
     
     return {
-        "approved": approval_result["approved"],
-        "validation_passed": validation_passed,
-        "grounding_check": grounding_result,
-        "safety_check": safety_result,
-        "confidence_check": confidence_result,
-        "escalation_required": approval_result["escalation_required"],
-        "escalation_reason": approval_result["escalation_reason"],
-        "validation_errors": validation_errors
+        "validation_status": validation_status,
+        "confidence_score": confidence_score,
+        "grounding_check": {
+            "citations_valid": citations_valid,
+            "hallucination_detected": hallucination_detected
+        },
+        "safety_check": {
+            "contains_draft_notice": contains_draft_notice,
+            "no_definitive_claims": no_definitive_claims
+        },
+        "issues_found": issues_found,
+        "approved": approved,
+        "required_escalation": required_escalation
     }
 
 
-def _check_grounding(policy_output: Dict[str, Any], source_text: str) -> Dict[str, Any]:
+def _check_grounding(
+    policy_output: Dict[str, Any],
+    source_text: str,
+    issues_found: List[str]
+) -> Dict[str, bool]:
     """
     Checks if all citations in the policy response are grounded in the source text.
     
     Args:
         policy_output: The policy response dict
         source_text: The original document text
+        issues_found: List to append issues to
     
     Returns:
         dict: {
-            "passed": bool,
-            "total_citations": int,
-            "valid_citations": int,
-            "invalid_citations": list[str],
-            "errors": list[str]
+            "citations_valid": bool,
+            "hallucination_detected": bool
         }
     """
     citations = policy_output.get("citations", [])
     
     if not citations:
         return {
-            "passed": True,
-            "total_citations": 0,
-            "valid_citations": 0,
-            "invalid_citations": [],
-            "errors": []
+            "citations_valid": True,
+            "hallucination_detected": False
         }
     
     # Normalize source text for comparison
-    source_normalized = " ".join(source_text.split()).lower()
+    source_normalized = source_text.lower()
     
-    invalid_citations = []
+    hallucination_detected = False
     for citation in citations:
-        citation_normalized = " ".join(citation.split()).lower()
+        citation_normalized = citation.lower()
         if citation_normalized not in source_normalized:
-            invalid_citations.append(citation)
+            hallucination_detected = True
+            issues_found.append(f"Citation quote not found in source: {citation}")
     
-    valid_count = len(citations) - len(invalid_citations)
-    passed = len(invalid_citations) == 0
-    
-    errors = []
-    if not passed:
-        errors.append(f"Found {len(invalid_citations)} ungrounded citation(s)")
+    citations_valid = not hallucination_detected
     
     return {
-        "passed": passed,
-        "total_citations": len(citations),
-        "valid_citations": valid_count,
-        "invalid_citations": invalid_citations,
-        "errors": errors
+        "citations_valid": citations_valid,
+        "hallucination_detected": hallucination_detected
     }
 
 
-def _check_safety_notice(policy_output: Dict[str, Any]) -> Dict[str, Any]:
+def _check_safety(
+    policy_output: Dict[str, Any],
+    issues_found: List[str]
+) -> Dict[str, bool]:
     """
-    Checks if the policy response contains the exact required safety notice.
+    Checks if the policy response contains the exact required safety notice
+    and does not contain prohibited definitive language.
     
     Args:
         policy_output: The policy response dict
+        issues_found: List to append issues to
     
     Returns:
         dict: {
-            "passed": bool,
-            "expected": str,
-            "actual": str or None,
-            "error": str or None
+            "contains_draft_notice": bool,
+            "no_definitive_claims": bool
         }
     """
+    # Check safety notice
     actual_notice = policy_output.get("safety_notice")
-    passed = actual_notice == REQUIRED_SAFETY_NOTICE
+    contains_draft_notice = actual_notice == REQUIRED_SAFETY_NOTICE
     
-    error = None
-    if not passed:
-        if actual_notice is None:
-            error = "Missing safety_notice field"
-        else:
-            error = f"Incorrect safety notice: expected '{REQUIRED_SAFETY_NOTICE}', got '{actual_notice}'"
+    if not contains_draft_notice:
+        issues_found.append("Missing or incorrect safety notice")
     
-    return {
-        "passed": passed,
-        "expected": REQUIRED_SAFETY_NOTICE,
-        "actual": actual_notice,
-        "error": error
-    }
-
-
-def _check_confidence(
-    policy_output: Dict[str, Any],
-    original_risk_data: Dict[str, Any]
-) -> Dict[str, Any]:
-    """
-    Checks if the confidence score is valid and appropriate for the risk level.
+    # Check for prohibited definitive language
+    draft_response = policy_output.get("draft_response", "")
+    draft_response_lower = draft_response.lower()
     
-    Args:
-        policy_output: The policy response dict
-        original_risk_data: The risk assessment data
-    
-    Returns:
-        dict: {
-            "passed": bool,
-            "confidence": float or None,
-            "in_valid_range": bool,
-            "risk_level": str,
-            "error": str or None
-        }
-    """
-    confidence = policy_output.get("confidence")
-    risk_level = original_risk_data.get("risk_level", "UNKNOWN")
-    
-    # Check if confidence exists and is a number
-    if confidence is None:
-        return {
-            "passed": False,
-            "confidence": None,
-            "in_valid_range": False,
-            "risk_level": risk_level,
-            "error": "Missing confidence field"
-        }
-    
-    if not isinstance(confidence, (int, float)):
-        return {
-            "passed": False,
-            "confidence": confidence,
-            "in_valid_range": False,
-            "risk_level": risk_level,
-            "error": f"Confidence must be a number, got {type(confidence).__name__}"
-        }
-    
-    # Check if confidence is in valid range [0.0, 1.0]
-    in_valid_range = 0.0 <= confidence <= 1.0
-    
-    if not in_valid_range:
-        return {
-            "passed": False,
-            "confidence": confidence,
-            "in_valid_range": False,
-            "risk_level": risk_level,
-            "error": f"Confidence {confidence} outside valid range [0.0, 1.0]"
-        }
+    no_definitive_claims = True
+    for phrase in PROHIBITED_PHRASES:
+        if phrase in draft_response_lower:
+            no_definitive_claims = False
+            issues_found.append(f"Definitive legal language detected: {phrase}")
     
     return {
-        "passed": True,
-        "confidence": confidence,
-        "in_valid_range": True,
-        "risk_level": risk_level,
-        "error": None
-    }
-
-
-def _determine_approval(
-    validation_passed: bool,
-    policy_output: Dict[str, Any],
-    original_risk_data: Dict[str, Any],
-    grounding_result: Dict[str, Any],
-    confidence_result: Dict[str, Any]
-) -> Dict[str, Any]:
-    """
-    Determines if the policy response should be approved or escalated.
-    
-    Approval logic:
-    - If validation failed: not approved, escalate
-    - If CRITICAL risk: always escalate for human review
-    - If HIGH risk and confidence < 0.7: escalate
-    - If confidence < 0.5: escalate
-    - Otherwise: approve
-    
-    Args:
-        validation_passed: Whether all validation checks passed
-        policy_output: The policy response dict
-        original_risk_data: The risk assessment data
-        grounding_result: Result from grounding check
-        confidence_result: Result from confidence check
-    
-    Returns:
-        dict: {
-            "approved": bool,
-            "escalation_required": bool,
-            "escalation_reason": str or None
-        }
-    """
-    risk_level = original_risk_data.get("risk_level", "UNKNOWN")
-    confidence = confidence_result.get("confidence", 0.0)
-    
-    # If validation failed, escalate
-    if not validation_passed:
-        return {
-            "approved": False,
-            "escalation_required": True,
-            "escalation_reason": "Validation checks failed"
-        }
-    
-    # CRITICAL risk always requires human review
-    if risk_level == "CRITICAL":
-        return {
-            "approved": False,
-            "escalation_required": True,
-            "escalation_reason": "CRITICAL risk level requires human review"
-        }
-    
-    # HIGH risk with low confidence requires escalation
-    if risk_level == "HIGH" and confidence < 0.7:
-        return {
-            "approved": False,
-            "escalation_required": True,
-            "escalation_reason": f"HIGH risk with low confidence ({confidence:.2f})"
-        }
-    
-    # Low confidence requires escalation
-    if confidence < 0.5:
-        return {
-            "approved": False,
-            "escalation_required": True,
-            "escalation_reason": f"Low confidence score ({confidence:.2f})"
-        }
-    
-    # All checks passed, approve
-    return {
-        "approved": True,
-        "escalation_required": False,
-        "escalation_reason": None
+        "contains_draft_notice": contains_draft_notice,
+        "no_definitive_claims": no_definitive_claims
     }

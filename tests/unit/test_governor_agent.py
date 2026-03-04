@@ -1,301 +1,42 @@
 """
-Unit tests for Governor Agent validation logic.
+Unit tests for Governor Validation Agent.
 """
 
-import pytest
-from src.governor_agent import (
-    validate_policy_response,
-    _check_grounding,
-    _check_safety_notice,
-    _check_confidence,
-    _determine_approval,
-    REQUIRED_SAFETY_NOTICE
-)
+import unittest
+from src.governor_agent import validate_policy_response, REQUIRED_SAFETY_NOTICE
 
 
-class TestGroundingCheck:
-    """Tests for citation grounding validation."""
+class TestGovernorAgent(unittest.TestCase):
+    """Tests for Governor validation logic."""
     
-    def test_all_citations_grounded(self):
-        """Test that valid citations pass grounding check."""
-        policy_output = {
-            "citations": [
-                "Eviction notice dated 2024-03-15",
-                "Tenant must vacate property by 2024-04-15"
-            ]
-        }
-        source_text = """
-        Eviction notice dated 2024-03-15.
-        Tenant must vacate property by 2024-04-15 due to rent arrears.
-        """
-        
-        result = _check_grounding(policy_output, source_text)
-        
-        assert result["passed"] is True
-        assert result["total_citations"] == 2
-        assert result["valid_citations"] == 2
-        assert result["invalid_citations"] == []
-        assert result["errors"] == []
-    
-    def test_ungrounded_citation_fails(self):
-        """Test that ungrounded citations fail grounding check."""
-        policy_output = {
-            "citations": [
-                "This text does not appear in source",
-                "Eviction notice dated 2024-03-15"
-            ]
-        }
-        source_text = "Eviction notice dated 2024-03-15."
-        
-        result = _check_grounding(policy_output, source_text)
-        
-        assert result["passed"] is False
-        assert result["total_citations"] == 2
-        assert result["valid_citations"] == 1
-        assert len(result["invalid_citations"]) == 1
-        assert "This text does not appear in source" in result["invalid_citations"]
-        assert len(result["errors"]) == 1
-    
-    def test_case_insensitive_matching(self):
-        """Test that grounding check is case-insensitive."""
-        policy_output = {
-            "citations": ["EVICTION NOTICE"]
-        }
-        source_text = "eviction notice dated 2024-03-15"
-        
-        result = _check_grounding(policy_output, source_text)
-        
-        assert result["passed"] is True
-        assert result["valid_citations"] == 1
-    
-    def test_whitespace_normalized_matching(self):
-        """Test that grounding check normalizes whitespace."""
-        policy_output = {
-            "citations": ["Eviction    notice"]
-        }
-        source_text = "Eviction\nnotice\tdated 2024-03-15"
-        
-        result = _check_grounding(policy_output, source_text)
-        
-        assert result["passed"] is True
-        assert result["valid_citations"] == 1
-    
-    def test_no_citations_passes(self):
-        """Test that policy with no citations passes grounding check."""
-        policy_output = {"citations": []}
-        source_text = "Some text"
-        
-        result = _check_grounding(policy_output, source_text)
-        
-        assert result["passed"] is True
-        assert result["total_citations"] == 0
-
-
-class TestSafetyNoticeCheck:
-    """Tests for safety notice validation."""
-    
-    def test_correct_safety_notice_passes(self):
-        """Test that correct safety notice passes validation."""
-        policy_output = {
-            "safety_notice": REQUIRED_SAFETY_NOTICE
-        }
-        
-        result = _check_safety_notice(policy_output)
-        
-        assert result["passed"] is True
-        assert result["expected"] == REQUIRED_SAFETY_NOTICE
-        assert result["actual"] == REQUIRED_SAFETY_NOTICE
-        assert result["error"] is None
-    
-    def test_incorrect_safety_notice_fails(self):
-        """Test that incorrect safety notice fails validation."""
-        policy_output = {
-            "safety_notice": "This is a draft"
-        }
-        
-        result = _check_safety_notice(policy_output)
-        
-        assert result["passed"] is False
-        assert result["error"] is not None
-        assert "Incorrect safety notice" in result["error"]
-    
-    def test_missing_safety_notice_fails(self):
-        """Test that missing safety notice fails validation."""
-        policy_output = {}
-        
-        result = _check_safety_notice(policy_output)
-        
-        assert result["passed"] is False
-        assert result["actual"] is None
-        assert "Missing safety_notice field" in result["error"]
-
-
-class TestConfidenceCheck:
-    """Tests for confidence score validation."""
-    
-    def test_valid_confidence_passes(self):
-        """Test that valid confidence score passes validation."""
-        policy_output = {"confidence": 0.85}
-        risk_data = {"risk_level": "MEDIUM"}
-        
-        result = _check_confidence(policy_output, risk_data)
-        
-        assert result["passed"] is True
-        assert result["confidence"] == 0.85
-        assert result["in_valid_range"] is True
-        assert result["error"] is None
-    
-    def test_confidence_below_zero_fails(self):
-        """Test that confidence < 0.0 fails validation."""
-        policy_output = {"confidence": -0.1}
-        risk_data = {"risk_level": "MEDIUM"}
-        
-        result = _check_confidence(policy_output, risk_data)
-        
-        assert result["passed"] is False
-        assert result["in_valid_range"] is False
-        assert "outside valid range" in result["error"]
-    
-    def test_confidence_above_one_fails(self):
-        """Test that confidence > 1.0 fails validation."""
-        policy_output = {"confidence": 1.5}
-        risk_data = {"risk_level": "MEDIUM"}
-        
-        result = _check_confidence(policy_output, risk_data)
-        
-        assert result["passed"] is False
-        assert result["in_valid_range"] is False
-        assert "outside valid range" in result["error"]
-    
-    def test_missing_confidence_fails(self):
-        """Test that missing confidence fails validation."""
-        policy_output = {}
-        risk_data = {"risk_level": "MEDIUM"}
-        
-        result = _check_confidence(policy_output, risk_data)
-        
-        assert result["passed"] is False
-        assert result["confidence"] is None
-        assert "Missing confidence field" in result["error"]
-    
-    def test_non_numeric_confidence_fails(self):
-        """Test that non-numeric confidence fails validation."""
-        policy_output = {"confidence": "high"}
-        risk_data = {"risk_level": "MEDIUM"}
-        
-        result = _check_confidence(policy_output, risk_data)
-        
-        assert result["passed"] is False
-        assert "must be a number" in result["error"]
-
-
-class TestApprovalLogic:
-    """Tests for approval and escalation logic."""
-    
-    def test_validation_failure_escalates(self):
-        """Test that validation failure triggers escalation."""
-        policy_output = {"confidence": 0.9}
-        risk_data = {"risk_level": "MEDIUM"}
-        grounding_result = {"passed": True}
-        confidence_result = {"passed": True, "confidence": 0.9}
-        
-        result = _determine_approval(
-            validation_passed=False,
-            policy_output=policy_output,
-            original_risk_data=risk_data,
-            grounding_result=grounding_result,
-            confidence_result=confidence_result
-        )
-        
-        assert result["approved"] is False
-        assert result["escalation_required"] is True
-        assert "Validation checks failed" in result["escalation_reason"]
-    
-    def test_critical_risk_always_escalates(self):
-        """Test that CRITICAL risk always requires escalation."""
-        policy_output = {"confidence": 0.95}
-        risk_data = {"risk_level": "CRITICAL"}
-        grounding_result = {"passed": True}
-        confidence_result = {"passed": True, "confidence": 0.95}
-        
-        result = _determine_approval(
-            validation_passed=True,
-            policy_output=policy_output,
-            original_risk_data=risk_data,
-            grounding_result=grounding_result,
-            confidence_result=confidence_result
-        )
-        
-        assert result["approved"] is False
-        assert result["escalation_required"] is True
-        assert "CRITICAL risk level" in result["escalation_reason"]
-    
-    def test_high_risk_low_confidence_escalates(self):
-        """Test that HIGH risk with confidence < 0.7 escalates."""
-        policy_output = {"confidence": 0.65}
-        risk_data = {"risk_level": "HIGH"}
-        grounding_result = {"passed": True}
-        confidence_result = {"passed": True, "confidence": 0.65}
-        
-        result = _determine_approval(
-            validation_passed=True,
-            policy_output=policy_output,
-            original_risk_data=risk_data,
-            grounding_result=grounding_result,
-            confidence_result=confidence_result
-        )
-        
-        assert result["approved"] is False
-        assert result["escalation_required"] is True
-        assert "HIGH risk with low confidence" in result["escalation_reason"]
-    
-    def test_low_confidence_escalates(self):
-        """Test that confidence < 0.5 triggers escalation."""
-        policy_output = {"confidence": 0.4}
-        risk_data = {"risk_level": "MEDIUM"}
-        grounding_result = {"passed": True}
-        confidence_result = {"passed": True, "confidence": 0.4}
-        
-        result = _determine_approval(
-            validation_passed=True,
-            policy_output=policy_output,
-            original_risk_data=risk_data,
-            grounding_result=grounding_result,
-            confidence_result=confidence_result
-        )
-        
-        assert result["approved"] is False
-        assert result["escalation_required"] is True
-        assert "Low confidence score" in result["escalation_reason"]
-    
-    def test_medium_risk_high_confidence_approves(self):
-        """Test that MEDIUM risk with high confidence is approved."""
-        policy_output = {"confidence": 0.85}
-        risk_data = {"risk_level": "MEDIUM"}
-        grounding_result = {"passed": True}
-        confidence_result = {"passed": True, "confidence": 0.85}
-        
-        result = _determine_approval(
-            validation_passed=True,
-            policy_output=policy_output,
-            original_risk_data=risk_data,
-            grounding_result=grounding_result,
-            confidence_result=confidence_result
-        )
-        
-        assert result["approved"] is True
-        assert result["escalation_required"] is False
-        assert result["escalation_reason"] is None
-
-
-class TestValidatePolicyResponse:
-    """Integration tests for full validation pipeline."""
-    
-    def test_fully_valid_response_approved(self):
-        """Test that a fully valid response is approved."""
+    def test_valid_output_approved(self):
+        """Test that all checks pass results in APPROVED with approved=True."""
         policy_output = {
             "citations": ["Eviction notice dated 2024-03-15"],
             "safety_notice": REQUIRED_SAFETY_NOTICE,
+            "draft_response": "We recommend contacting housing support services.",
+            "confidence": 0.85
+        }
+        source_text = "Eviction notice dated 2024-03-15. Tenant must vacate."
+        risk_data = {"risk_level": "MEDIUM"}
+        
+        result = validate_policy_response(policy_output, source_text, risk_data)
+        
+        self.assertEqual(result["validation_status"], "APPROVED")
+        self.assertTrue(result["approved"])
+        self.assertTrue(result["grounding_check"]["citations_valid"])
+        self.assertFalse(result["grounding_check"]["hallucination_detected"])
+        self.assertTrue(result["safety_check"]["contains_draft_notice"])
+        self.assertTrue(result["safety_check"]["no_definitive_claims"])
+        self.assertEqual(result["issues_found"], [])
+        self.assertFalse(result["required_escalation"])
+    
+    def test_missing_citation_quote_vetoed(self):
+        """Test that quote not in source results in VETOED with hallucination=True."""
+        policy_output = {
+            "citations": ["This text does not appear in source"],
+            "safety_notice": REQUIRED_SAFETY_NOTICE,
+            "draft_response": "Contact support services.",
             "confidence": 0.85
         }
         source_text = "Eviction notice dated 2024-03-15."
@@ -303,32 +44,36 @@ class TestValidatePolicyResponse:
         
         result = validate_policy_response(policy_output, source_text, risk_data)
         
-        assert result["approved"] is True
-        assert result["validation_passed"] is True
-        assert result["escalation_required"] is False
-        assert result["validation_errors"] == []
+        self.assertEqual(result["validation_status"], "VETOED")
+        self.assertFalse(result["approved"])
+        self.assertFalse(result["grounding_check"]["citations_valid"])
+        self.assertTrue(result["grounding_check"]["hallucination_detected"])
+        self.assertIn("Citation quote not found in source", result["issues_found"][0])
+        self.assertTrue(result["required_escalation"])
     
-    def test_ungrounded_citation_rejected(self):
-        """Test that ungrounded citations cause rejection."""
+    def test_hallucination_detected(self):
+        """Test that fabricated quote sets hallucination_detected=True."""
         policy_output = {
-            "citations": ["This text is not in source"],
+            "citations": ["Fabricated quote that doesn't exist"],
             "safety_notice": REQUIRED_SAFETY_NOTICE,
-            "confidence": 0.85
+            "draft_response": "Contact support.",
+            "confidence": 0.9
         }
-        source_text = "Eviction notice dated 2024-03-15."
-        risk_data = {"risk_level": "MEDIUM"}
+        source_text = "Real document text here."
+        risk_data = {"risk_level": "LOW"}
         
         result = validate_policy_response(policy_output, source_text, risk_data)
         
-        assert result["approved"] is False
-        assert result["validation_passed"] is False
-        assert result["escalation_required"] is True
-        assert len(result["validation_errors"]) > 0
+        self.assertTrue(result["grounding_check"]["hallucination_detected"])
+        self.assertFalse(result["grounding_check"]["citations_valid"])
+        self.assertEqual(result["validation_status"], "VETOED")
     
-    def test_missing_safety_notice_rejected(self):
-        """Test that missing safety notice causes rejection."""
+    def test_incorrect_safety_notice_flagged(self):
+        """Test that wrong notice string results in FLAGGED."""
         policy_output = {
             "citations": [],
+            "safety_notice": "This is a draft",
+            "draft_response": "Contact support services.",
             "confidence": 0.85
         }
         source_text = "Some text"
@@ -336,33 +81,53 @@ class TestValidatePolicyResponse:
         
         result = validate_policy_response(policy_output, source_text, risk_data)
         
-        assert result["approved"] is False
-        assert result["validation_passed"] is False
-        assert result["escalation_required"] is True
-        assert any("safety_notice" in err for err in result["validation_errors"])
+        self.assertEqual(result["validation_status"], "FLAGGED")
+        self.assertFalse(result["approved"])
+        self.assertFalse(result["safety_check"]["contains_draft_notice"])
+        self.assertIn("Missing or incorrect safety notice", result["issues_found"])
     
-    def test_invalid_confidence_rejected(self):
-        """Test that invalid confidence causes rejection."""
+    def test_definitive_language_flagged(self):
+        """Test that 'must comply' in draft results in FLAGGED with no_definitive_claims=False."""
         policy_output = {
             "citations": [],
             "safety_notice": REQUIRED_SAFETY_NOTICE,
-            "confidence": 1.5
+            "draft_response": "You must comply with this requirement immediately.",
+            "confidence": 0.85
         }
         source_text = "Some text"
         risk_data = {"risk_level": "MEDIUM"}
         
         result = validate_policy_response(policy_output, source_text, risk_data)
         
-        assert result["approved"] is False
-        assert result["validation_passed"] is False
-        assert result["escalation_required"] is True
-        assert any("outside valid range" in err for err in result["validation_errors"])
+        self.assertEqual(result["validation_status"], "FLAGGED")
+        self.assertFalse(result["approved"])
+        self.assertFalse(result["safety_check"]["no_definitive_claims"])
+        self.assertIn("Definitive legal language detected: must comply", result["issues_found"])
     
-    def test_critical_risk_escalates_even_if_valid(self):
-        """Test that CRITICAL risk escalates even with valid response."""
+    def test_low_confidence_vetoed(self):
+        """Test that policy confidence=0.6 results in VETOED."""
         policy_output = {
             "citations": [],
             "safety_notice": REQUIRED_SAFETY_NOTICE,
+            "draft_response": "Contact support services.",
+            "confidence": 0.6
+        }
+        source_text = "Some text"
+        risk_data = {"risk_level": "MEDIUM"}
+        
+        result = validate_policy_response(policy_output, source_text, risk_data)
+        
+        self.assertEqual(result["validation_status"], "VETOED")
+        self.assertFalse(result["approved"])
+        self.assertLess(result["confidence_score"], 0.75)
+        self.assertIn("Confidence below threshold (0.75)", result["issues_found"])
+    
+    def test_critical_risk_approved_still_escalates(self):
+        """Test that CRITICAL + APPROVED results in required_escalation=True."""
+        policy_output = {
+            "citations": [],
+            "safety_notice": REQUIRED_SAFETY_NOTICE,
+            "draft_response": "Contact support services.",
             "confidence": 0.95
         }
         source_text = "Some text"
@@ -370,7 +135,149 @@ class TestValidatePolicyResponse:
         
         result = validate_policy_response(policy_output, source_text, risk_data)
         
-        assert result["approved"] is False
-        assert result["validation_passed"] is True
-        assert result["escalation_required"] is True
-        assert "CRITICAL" in result["escalation_reason"]
+        self.assertEqual(result["validation_status"], "APPROVED")
+        self.assertTrue(result["approved"])
+        self.assertTrue(result["required_escalation"])
+    
+    def test_high_risk_approved_still_escalates(self):
+        """Test that HIGH + APPROVED results in required_escalation=True."""
+        policy_output = {
+            "citations": [],
+            "safety_notice": REQUIRED_SAFETY_NOTICE,
+            "draft_response": "Contact support services.",
+            "confidence": 0.85
+        }
+        source_text = "Some text"
+        risk_data = {"risk_level": "HIGH"}
+        
+        result = validate_policy_response(policy_output, source_text, risk_data)
+        
+        self.assertEqual(result["validation_status"], "APPROVED")
+        self.assertTrue(result["approved"])
+        self.assertTrue(result["required_escalation"])
+    
+    def test_medium_risk_approved_no_escalation(self):
+        """Test that MEDIUM + APPROVED results in required_escalation=False."""
+        policy_output = {
+            "citations": [],
+            "safety_notice": REQUIRED_SAFETY_NOTICE,
+            "draft_response": "Contact support services.",
+            "confidence": 0.85
+        }
+        source_text = "Some text"
+        risk_data = {"risk_level": "MEDIUM"}
+        
+        result = validate_policy_response(policy_output, source_text, risk_data)
+        
+        self.assertEqual(result["validation_status"], "APPROVED")
+        self.assertTrue(result["approved"])
+        self.assertFalse(result["required_escalation"])
+    
+    def test_vetoed_always_escalates(self):
+        """Test that LOW + VETOED results in required_escalation=True."""
+        policy_output = {
+            "citations": ["Fake quote"],
+            "safety_notice": REQUIRED_SAFETY_NOTICE,
+            "draft_response": "Contact support.",
+            "confidence": 0.85
+        }
+        source_text = "Real text"
+        risk_data = {"risk_level": "LOW"}
+        
+        result = validate_policy_response(policy_output, source_text, risk_data)
+        
+        self.assertEqual(result["validation_status"], "VETOED")
+        self.assertFalse(result["approved"])
+        self.assertTrue(result["required_escalation"])
+    
+    def test_confidence_degradation(self):
+        """Test that hallucination reduces score by 0.2."""
+        policy_output = {
+            "citations": ["Fake quote"],
+            "safety_notice": REQUIRED_SAFETY_NOTICE,
+            "draft_response": "Contact support.",
+            "confidence": 0.9
+        }
+        source_text = "Real text"
+        risk_data = {"risk_level": "MEDIUM"}
+        
+        result = validate_policy_response(policy_output, source_text, risk_data)
+        
+        # 0.9 - 0.2 (hallucination) = 0.7
+        self.assertAlmostEqual(result["confidence_score"], 0.7, places=2)
+        self.assertTrue(result["grounding_check"]["hallucination_detected"])
+    
+    def test_issues_found_populated(self):
+        """Test that issues_found contains specific strings."""
+        policy_output = {
+            "citations": ["Fake quote"],
+            "safety_notice": "Wrong notice",
+            "draft_response": "You are legally required to comply.",
+            "confidence": 0.6
+        }
+        source_text = "Real text"
+        risk_data = {"risk_level": "MEDIUM"}
+        
+        result = validate_policy_response(policy_output, source_text, risk_data)
+        
+        self.assertGreater(len(result["issues_found"]), 0)
+        self.assertTrue(any("Citation quote not found" in issue for issue in result["issues_found"]))
+        self.assertIn("Missing or incorrect safety notice", result["issues_found"])
+        self.assertTrue(any("Definitive legal language detected" in issue for issue in result["issues_found"]))
+        self.assertIn("Confidence below threshold (0.75)", result["issues_found"])
+    
+    def test_multiple_prohibited_phrases(self):
+        """Test detection of multiple prohibited phrases."""
+        policy_output = {
+            "citations": [],
+            "safety_notice": REQUIRED_SAFETY_NOTICE,
+            "draft_response": "This guarantees success and you are legally required to act.",
+            "confidence": 0.85
+        }
+        source_text = "Some text"
+        risk_data = {"risk_level": "MEDIUM"}
+        
+        result = validate_policy_response(policy_output, source_text, risk_data)
+        
+        self.assertEqual(result["validation_status"], "FLAGGED")
+        self.assertFalse(result["safety_check"]["no_definitive_claims"])
+        # Should detect both "this guarantees" and "you are legally required"
+        definitive_issues = [issue for issue in result["issues_found"] if "Definitive legal language" in issue]
+        self.assertGreaterEqual(len(definitive_issues), 2)
+    
+    def test_confidence_clamping_lower_bound(self):
+        """Test that confidence score is clamped to 0.0 minimum."""
+        policy_output = {
+            "citations": ["Fake quote"],
+            "safety_notice": "Wrong",
+            "draft_response": "You must comply.",
+            "confidence": 0.3
+        }
+        source_text = "Real text"
+        risk_data = {"risk_level": "MEDIUM"}
+        
+        result = validate_policy_response(policy_output, source_text, risk_data)
+        
+        # 0.3 - 0.2 (hallucination) - 0.1 (no notice) - 0.15 (definitive) = -0.15 → clamped to 0.0
+        self.assertGreaterEqual(result["confidence_score"], 0.0)
+        self.assertLessEqual(result["confidence_score"], 1.0)
+    
+    def test_confidence_clamping_upper_bound(self):
+        """Test that confidence score is clamped to 1.0 maximum."""
+        policy_output = {
+            "citations": [],
+            "safety_notice": REQUIRED_SAFETY_NOTICE,
+            "draft_response": "Contact support services.",
+            "confidence": 1.5  # Invalid high value
+        }
+        source_text = "Some text"
+        risk_data = {"risk_level": "MEDIUM"}
+        
+        result = validate_policy_response(policy_output, source_text, risk_data)
+        
+        self.assertLessEqual(result["confidence_score"], 1.0)
+        self.assertGreaterEqual(result["confidence_score"], 0.0)
+
+
+if __name__ == '__main__':
+    unittest.main()
