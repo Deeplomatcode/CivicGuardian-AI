@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CivicGuardian AI - Caseworker Portal</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🛡️ CivicGuardian AI</h1>
+            <p class="subtitle">Caseworker Portal - Demo Interface</p>
+        </header>
+
+        <main>
+            <!-- Upload Section -->
+            <section class="upload-section">
+                <h2>1. Upload Correspondence</h2>
+                <div class="upload-area" id="uploadArea">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="17 8 12 3 7 8"></polyline>
+                        <line x1="12" y1="3" x2="12" y2="15"></line>
+                    </svg>
+                    <p>Drop letter here or click to upload</p>
+                    <p class="upload-hint">Supports: PDF, TXT, Email (EML)</p>
+                    <input type="file" id="fileInput" accept=".pdf,.txt,.eml" hidden>
+                </div>
+                <button class="btn btn-secondary" id="loadSampleBtn">Load Sample Letter</button>
+            </section>
+
+            <!-- Document Preview -->
+            <section class="preview-section" id="previewSection" style="display: none;">
+                <h2>2. Document Preview</h2>
+                <div class="document-preview">
+                    <div class="preview-header">
+                        <span class="file-name" id="fileName">sample-letter.txt</span>
+                        <span class="file-size" id="fileSize">1.2 KB</span>
+                    </div>
+                    <div class="preview-content" id="previewContent"></div>
+                </div>
+                <button class="btn btn-primary" id="analyzeBtn">
+                    <span id="analyzeText">Analyze Document</span>
+                    <span id="analyzeSpinner" class="spinner" style="display: none;"></span>
+                </button>
+            </section>
+
+            <!-- Results Section -->
+            <section class="results-section" id="resultsSection" style="display: none;">
+                <h2>3. Analysis Results</h2>
+                
+                <!-- Risk Assessment Panel -->
+                <div class="result-panel risk-panel">
+                    <div class="panel-header">
+                        <h3>🎯 Risk Assessment</h3>
+                        <span class="badge" id="riskBadge">HIGH</span>
+                    </div>
+                    <div class="panel-body">
+                        <div class="metric">
+                            <label>Risk Level:</label>
+                            <span id="riskLevel">HIGH</span>
+                        </div>
+                        <div class="metric">
+                            <label>Confidence:</label>
+                            <span id="riskConfidence">87%</span>
+                        </div>
+                        <div class="metric">
+                            <label>Deadline:</label>
+                            <span id="deadline">28 February 2026</span>
+                        </div>
+                        <div class="metric">
+                            <label>Required Action:</label>
+                            <span id="requiredAction">Submit proof of income to council</span>
+                        </div>
+                        <div class="metric">
+                            <label>Urgency Indicators:</label>
+                            <ul id="urgencyIndicators"></ul>
+                        </div>
+                        <div class="agent-info">
+                            <small>Powered by Amazon Bedrock Nova Lite</small>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Policy Reasoner Panel -->
+                <div class="result-panel policy-panel">
+                    <div class="panel-header">
+                        <h3>📝 Draft Response</h3>
+                        <span class="badge badge-success">GENERATED</span>
+                    </div>
+                    <div class="panel-body">
+                        <div class="draft-response" id="draftResponse"></div>
+                        <div class="rationale">
+                            <h4>Rationale:</h4>
+                            <ul id="rationale"></ul>
+                        </div>
+                        <div class="legislation">
+                            <h4>Legislation Referenced:</h4>
+                            <ul id="legislation"></ul>
+                        </div>
+                        <div class="safety-notice">
+                            ⚠️ DRAFT FOR REVIEW - Not legal advice
+                        </div>
+                        <div class="agent-info">
+                            <small>Powered by Amazon Bedrock Nova Pro</small>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Governor Validation Panel -->
+                <div class="result-panel governor-panel">
+                    <div class="panel-header">
+                        <h3>✓ Validation Status</h3>
+                        <span class="badge" id="validationBadge">APPROVED</span>
+                    </div>
+                    <div class="panel-body">
+                        <div class="metric">
+                            <label>Status:</label>
+                            <span id="validationStatus">APPROVED</span>
+                        </div>
+                        <div class="metric">
+                            <label>Confidence Score:</label>
+                            <span id="validationConfidence">82%</span>
+                        </div>
+                        <div class="validation-checks">
+                            <h4>Validation Checks:</h4>
+                            <div class="check-item">
+                                <span class="check-icon">✓</span>
+                                <span>Citations valid</span>
+                            </div>
+                            <div class="check-item">
+                                <span class="check-icon">✓</span>
+                                <span>No hallucination detected</span>
+                            </div>
+                            <div class="check-item">
+                                <span class="check-icon">✓</span>
+                                <span>Safety notice present</span>
+                            </div>
+                            <div class="check-item">
+                                <span class="check-icon">✓</span>
+                                <span>No definitive claims</span>
+                            </div>
+                        </div>
+                        <div class="escalation-notice" id="escalationNotice">
+                            <strong>⚠️ Human Review Required</strong>
+                            <p>HIGH risk case - caseworker approval needed before sending</p>
+                        </div>
+                        <div class="agent-info">
+                            <small>Pure Python Validation (0ms, £0.00 cost)</small>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="action-buttons">
+                    <button class="btn btn-secondary" id="resetBtn">Analyze Another Document</button>
+                    <button class="btn btn-success" id="approveBtn">Approve & Send to Caseworker</button>
+                </div>
+            </section>
+        </main>
+
+        <footer>
+            <p>CivicGuardian AI - AWS 10,000 AIdeas 2026 | Team Phenix</p>
+            <p class="demo-notice">Demo Interface - Using mock data for demonstration purposes</p>
+        </footer>
+    </div>
+
+    <script src="demo.js"></script>
+</body>
+</html>

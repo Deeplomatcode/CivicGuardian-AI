@@ -1,0 +1,452 @@
+/* CivicGuardian AI - Caseworker Portal Styles */
+
+:root {
+    --primary-color: #2563eb;
+    --secondary-color: #64748b;
+    --success-color: #10b981;
+    --warning-color: #f59e0b;
+    --danger-color: #ef4444;
+    --bg-color: #f8fafc;
+    --card-bg: #ffffff;
+    --text-primary: #1e293b;
+    --text-secondary: #64748b;
+    --border-color: #e2e8f0;
+    --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1);
+    --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1);
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    background-color: var(--bg-color);
+    color: var(--text-primary);
+    line-height: 1.6;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 2rem;
+}
+
+/* Header */
+header {
+    text-align: center;
+    margin-bottom: 3rem;
+    padding-bottom: 2rem;
+    border-bottom: 2px solid var(--border-color);
+}
+
+header h1 {
+    font-size: 2.5rem;
+    color: var(--primary-color);
+    margin-bottom: 0.5rem;
+}
+
+.subtitle {
+    font-size: 1.125rem;
+    color: var(--text-secondary);
+}
+
+/* Sections */
+section {
+    background: var(--card-bg);
+    border-radius: 12px;
+    padding: 2rem;
+    margin-bottom: 2rem;
+    box-shadow: var(--shadow);
+}
+
+section h2 {
+    font-size: 1.5rem;
+    margin-bottom: 1.5rem;
+    color: var(--text-primary);
+}
+
+/* Upload Area */
+.upload-area {
+    border: 2px dashed var(--border-color);
+    border-radius: 8px;
+    padding: 3rem;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    margin-bottom: 1rem;
+}
+
+.upload-area:hover {
+    border-color: var(--primary-color);
+    background-color: #f1f5f9;
+}
+
+.upload-area svg {
+    color: var(--text-secondary);
+    margin-bottom: 1rem;
+}
+
+.upload-area p {
+    color: var(--text-primary);
+    font-size: 1.125rem;
+    margin-bottom: 0.5rem;
+}
+
+.upload-hint {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+}
+
+/* Document Preview */
+.document-preview {
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    overflow: hidden;
+    margin-bottom: 1.5rem;
+}
+
+.preview-header {
+    background-color: #f8fafc;
+    padding: 1rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.file-name {
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.file-size {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+}
+
+.preview-content {
+    padding: 1.5rem;
+    background-color: #fafafa;
+    font-family: 'Courier New', monospace;
+    font-size: 0.875rem;
+    line-height: 1.8;
+    max-height: 300px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+}
+
+/* Result Panels */
+.result-panel {
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    margin-bottom: 1.5rem;
+    overflow: hidden;
+}
+
+.panel-header {
+    background-color: #f8fafc;
+    padding: 1rem 1.5rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.panel-header h3 {
+    font-size: 1.25rem;
+    margin: 0;
+}
+
+.panel-body {
+    padding: 1.5rem;
+}
+
+/* Badges */
+.badge {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.badge {
+    background-color: #fee2e2;
+    color: #991b1b;
+}
+
+.badge-success {
+    background-color: #d1fae5;
+    color: #065f46;
+}
+
+/* Metrics */
+.metric {
+    display: flex;
+    margin-bottom: 1rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.metric:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
+    padding-bottom: 0;
+}
+
+.metric label {
+    font-weight: 600;
+    color: var(--text-secondary);
+    min-width: 150px;
+}
+
+.metric span {
+    color: var(--text-primary);
+}
+
+.metric ul {
+    list-style: none;
+    padding-left: 0;
+}
+
+.metric ul li {
+    padding: 0.25rem 0;
+}
+
+.metric ul li:before {
+    content: "• ";
+    color: var(--primary-color);
+    font-weight: bold;
+}
+
+/* Draft Response */
+.draft-response {
+    background-color: #f8fafc;
+    border-left: 4px solid var(--primary-color);
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+    white-space: pre-wrap;
+    line-height: 1.8;
+    font-size: 0.9375rem;
+}
+
+.rationale, .legislation {
+    margin-bottom: 1.5rem;
+}
+
+.rationale h4, .legislation h4 {
+    font-size: 1rem;
+    margin-bottom: 0.75rem;
+    color: var(--text-secondary);
+}
+
+.rationale ul, .legislation ul {
+    list-style: none;
+    padding-left: 0;
+}
+
+.rationale ul li, .legislation ul li {
+    padding: 0.5rem 0;
+    padding-left: 1.5rem;
+    position: relative;
+}
+
+.rationale ul li:before {
+    content: "✓";
+    position: absolute;
+    left: 0;
+    color: var(--success-color);
+    font-weight: bold;
+}
+
+.legislation ul li:before {
+    content: "§";
+    position: absolute;
+    left: 0;
+    color: var(--primary-color);
+    font-weight: bold;
+}
+
+/* Safety Notice */
+.safety-notice {
+    background-color: #fef3c7;
+    border-left: 4px solid var(--warning-color);
+    padding: 1rem;
+    margin-bottom: 1rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #92400e;
+}
+
+/* Validation Checks */
+.validation-checks {
+    margin-bottom: 1.5rem;
+}
+
+.validation-checks h4 {
+    font-size: 1rem;
+    margin-bottom: 0.75rem;
+    color: var(--text-secondary);
+}
+
+.check-item {
+    display: flex;
+    align-items: center;
+    padding: 0.5rem 0;
+}
+
+.check-icon {
+    color: var(--success-color);
+    font-weight: bold;
+    margin-right: 0.75rem;
+    font-size: 1.25rem;
+}
+
+/* Escalation Notice */
+.escalation-notice {
+    background-color: #fef2f2;
+    border-left: 4px solid var(--danger-color);
+    padding: 1rem;
+    margin-bottom: 1rem;
+}
+
+.escalation-notice strong {
+    display: block;
+    margin-bottom: 0.5rem;
+    color: #991b1b;
+}
+
+.escalation-notice p {
+    margin: 0;
+    font-size: 0.875rem;
+    color: #7f1d1d;
+}
+
+/* Agent Info */
+.agent-info {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border-color);
+}
+
+.agent-info small {
+    color: var(--text-secondary);
+    font-size: 0.8125rem;
+}
+
+/* Buttons */
+.btn {
+    display: inline-block;
+    padding: 0.75rem 1.5rem;
+    border: none;
+    border-radius: 6px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-align: center;
+}
+
+.btn-primary {
+    background-color: var(--primary-color);
+    color: white;
+}
+
+.btn-primary:hover {
+    background-color: #1d4ed8;
+}
+
+.btn-secondary {
+    background-color: var(--secondary-color);
+    color: white;
+}
+
+.btn-secondary:hover {
+    background-color: #475569;
+}
+
+.btn-success {
+    background-color: var(--success-color);
+    color: white;
+}
+
+.btn-success:hover {
+    background-color: #059669;
+}
+
+.btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Action Buttons */
+.action-buttons {
+    display: flex;
+    gap: 1rem;
+    margin-top: 2rem;
+}
+
+.action-buttons .btn {
+    flex: 1;
+}
+
+/* Spinner */
+.spinner {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-radius: 50%;
+    border-top-color: white;
+    animation: spin 0.6s linear infinite;
+    margin-left: 0.5rem;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Footer */
+footer {
+    text-align: center;
+    padding: 2rem 0;
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+}
+
+.demo-notice {
+    margin-top: 0.5rem;
+    font-style: italic;
+    color: var(--warning-color);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .container {
+        padding: 1rem;
+    }
+
+    header h1 {
+        font-size: 2rem;
+    }
+
+    section {
+        padding: 1.5rem;
+    }
+
+    .action-buttons {
+        flex-direction: column;
+    }
+
+    .metric {
+        flex-direction: column;
+    }
+
+    .metric label {
+        margin-bottom: 0.5rem;
+    }
+}
