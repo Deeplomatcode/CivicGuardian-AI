@@ -23,7 +23,9 @@
         <header class="app-header">
             <div class="header-content">
                 <div class="logo-section">
-                    <div class="logo-icon">🛡️</div>
+                    <div class="logo-icon-wrapper">
+                        <div class="logo-icon">🛡️</div>
+                    </div>
                     <div class="logo-text">
                         <h1>CivicGuardian AI</h1>
                         <p class="subtitle">Caseworker Portal</p>
@@ -56,6 +58,34 @@
                     <input type="file" id="fileInput" accept=".pdf,.txt,.eml" hidden>
                 </div>
                 <button class="btn btn-secondary" id="loadSampleBtn">Load Sample Letter</button>
+            </section>
+
+            <!-- Impact Metrics Section -->
+            <section class="impact-metrics-section">
+                <div class="section-header-inline">
+                    <h2>Impact Metrics</h2>
+                    <span class="live-badge">Live</span>
+                </div>
+                <div class="bento-grid">
+                    <div class="bento-card metric-card">
+                        <div class="metric-icon">👥</div>
+                        <div class="metric-value">1,500+</div>
+                        <div class="metric-label">Caseworkers Supported</div>
+                        <div class="metric-sparkline"></div>
+                    </div>
+                    <div class="bento-card metric-card">
+                        <div class="metric-icon">⚡</div>
+                        <div class="metric-value">&lt;3s</div>
+                        <div class="metric-label">Verification Time</div>
+                        <div class="metric-sparkline"></div>
+                    </div>
+                    <div class="bento-card metric-card">
+                        <div class="metric-icon">📚</div>
+                        <div class="metric-value">10,000+</div>
+                        <div class="metric-label">HMRC/Gov Guidelines Referenced</div>
+                        <div class="metric-sparkline"></div>
+                    </div>
+                </div>
             </section>
 
             <!-- Document Preview -->
