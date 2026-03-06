@@ -10,8 +10,8 @@ AWS 10,000 AIdeas Competition - Social Impact Category
 ## Project Status
 
 ### Competition Timeline
-- **Deadline:** March 13, 2025, 8:00 PM UTC
-- **Voting Ends:** March 20, 2025
+- **Deadline:** March 13, 2026, 8:00 PM UTC
+- **Voting Ends:** March 20, 2026
 - **Days Remaining:** 14
 
 ### Development Progress

@@ -2,7 +2,7 @@
 
 **Category:** Social Impact  
 **Team:** Team Phenix  
-**Competition:** AWS 10,000 AIdeas 2025
+**Competition:** AWS 10,000 AIdeas 2026
 
 ---
 
@@ -243,13 +243,13 @@ The following screenshots demonstrate the complete implementation and testing pr
 ### Sample Input: Eviction Notice
 ```
 From: Oxford City Council Housing Department
-Date: 15 February 2025
+Date: 15 February 2026
 Subject: Housing Benefit Review - Action Required
 
 Dear Margaret,
 
 Your housing benefit is under review. Please submit proof of income
-by 28 February 2025 to avoid suspension of payments...
+by 28 February 2026 to avoid suspension of payments...
 ```
 
 ### Guardian Loop Processing:
@@ -263,7 +263,7 @@ by 28 February 2025 to avoid suspension of payments...
 ```json
 {
   "risk_level": "HIGH",
-  "deadline": "2025-02-28",
+  "deadline": "2026-02-28",
   "required_action": "Submit proof of income to council",
   "confidence_score": 0.87,
   "reasoning": "Housing benefit review with 13-day deadline; suspension risk identified"
@@ -278,7 +278,7 @@ For MEDIUM/HIGH/CRITICAL cases, the Policy Reasoner generates draft responses:
 {
   "skipped": false,
   "risk_level": "HIGH",
-  "draft_response": "Dear Housing Officer,\n\nI am writing regarding the housing benefit review dated 15 February 2025. I understand documentation is required by 28 February 2025.\n\nI am gathering the requested proof of income and will submit within the deadline. Please confirm receipt of this acknowledgment.\n\nThank you for your assistance.",
+  "draft_response": "Dear Housing Officer,\n\nI am writing regarding the housing benefit review dated 15 February 2026. I understand documentation is required by 28 February 2026.\n\nI am gathering the requested proof of income and will submit within the deadline. Please confirm receipt of this acknowledgment.\n\nThank you for your assistance.",
   "rationale_bullets": [
     "Acknowledges deadline urgency",
     "Confirms engagement with process",
@@ -426,13 +426,13 @@ Building the AI was straightforward. The challenge was understanding:
 - Textract/Transcribe for scanned letters and voicemails
 - API Gateway for caseworker portal
 
-### Pilot Program (Seeking Partners for Q2 2025)
+### Pilot Program (Seeking Partners for Q2 2026)
 
 Partner with 2-3 UK local authorities to pilot with 50 vulnerable adults:
 - **Measure:** Reduction in missed deadlines
 - **Measure:** Caseworker time savings
 - **Measure:** User feedback on dignity and autonomy
-- **Timeline:** Q2 2025 pilot launch (if selected for finals)
+- **Timeline:** Q2 2026 pilot launch (if selected for finals)
 
 ---
 

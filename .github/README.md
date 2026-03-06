@@ -1,6 +1,6 @@
 # CivicGuardian AI
 
-**AWS 10,000 AIdeas 2025 Semifinalist - Social Impact Category**
+**AWS 10,000 AIdeas 2026 Semifinalist - Social Impact Category**
 
 AI-powered digital advocate protecting vulnerable adults from housing, benefits, and care crises.
 
@@ -46,4 +46,4 @@ Full GDPR compliance with end-to-end encryption, 7-day retention, and automated 
 
 ---
 
-*Team Phenix | AWS 10,000 AIdeas 2025*
+*Team Phenix | AWS 10,000 AIdeas 2026*

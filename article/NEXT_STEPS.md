@@ -2,7 +2,7 @@
 
 **Status:** ✅ 98% Complete - Ready for Final Polish  
 **Time to Publication:** 3-4 hours  
-**Competition Deadline:** March 13, 2025, 8:00 PM UTC (9 days remaining)
+**Competition Deadline:** March 13, 2026, 8:00 PM UTC (9 days remaining)
 
 ---
 
@@ -50,7 +50,7 @@ Follow instructions in `GITHUB_SETUP.md`:
 
 1. Create repository at https://github.com/new
    - Name: `CivicGuardian-AI`
-   - Description: `AI-powered digital advocate for vulnerable adults - AWS 10,000 AIdeas 2025 semifinalist`
+   - Description: `AI-powered digital advocate for vulnerable adults - AWS 10,000 AIdeas 2026 semifinalist`
    - Public repository
 
 2. Connect and push:
@@ -190,10 +190,10 @@ Follow checklist in `article/PRE_PUBLICATION_CHECKLIST.md`:
 
 Everything is prepared. Just follow the 4 steps above and you'll have a complete, professional competition submission.
 
-**Good luck with AWS 10,000 AIdeas 2025!** 🚀
+**Good luck with AWS 10,000 AIdeas 2026!** 🚀
 
 ---
 
-*Generated: March 4, 2025*  
-*Competition Deadline: March 13, 2025, 8:00 PM UTC*  
+*Generated: March 4, 2026*  
+*Competition Deadline: March 13, 2026, 8:00 PM UTC*  
 *Days Remaining: 9*
