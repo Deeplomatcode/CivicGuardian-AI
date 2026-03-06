@@ -306,7 +306,7 @@ Your CivicGuardian AI project is production-ready, fully documented, and competi
 
 ---
 
-**Good luck with the AWS 10,000 AIdeas 2026 competition! 🚀**
+**Good luck with the AWS 10,000 AIdeas 2025 competition! 🚀**
 
 ---
 

@@ -206,7 +206,7 @@ open https://community.aws
 
 ---
 
-**🎉 Session Complete! CivicGuardian AI is ready for AWS 10,000 AIdeas 2026 competition submission!**
+**🎉 Session Complete! CivicGuardian AI is ready for AWS 10,000 AIdeas 2025 competition submission!**
 
 ---
 

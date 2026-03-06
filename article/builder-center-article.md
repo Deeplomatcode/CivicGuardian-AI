@@ -2,7 +2,7 @@
 
 **Category:** Social Impact  
 **Team:** Team Phenix  
-**Competition:** AWS 10,000 AIdeas 2026
+**Competition:** AWS 10,000 AIdeas 2025
 
 ---
 

@@ -5,7 +5,7 @@
 1. Go to https://github.com/new
 2. Fill in repository details:
    - **Name:** `CivicGuardian-AI`
-   - **Description:** `AI-powered digital advocate for vulnerable adults - AWS 10,000 AIdeas 2026 semifinalist`
+   - **Description:** `AI-powered digital advocate for vulnerable adults - AWS 10,000 AIdeas 2025 semifinalist`
    - **Visibility:** Public
    - **Initialize:** Do NOT add README, .gitignore, or license (we already have these)
 3. Click "Create repository"

@@ -50,7 +50,7 @@ Follow instructions in `GITHUB_SETUP.md`:
 
 1. Create repository at https://github.com/new
    - Name: `CivicGuardian-AI`
-   - Description: `AI-powered digital advocate for vulnerable adults - AWS 10,000 AIdeas 2026 semifinalist`
+   - Description: `AI-powered digital advocate for vulnerable adults - AWS 10,000 AIdeas 2025 semifinalist`
    - Public repository
 
 2. Connect and push:
@@ -190,7 +190,7 @@ Follow checklist in `article/PRE_PUBLICATION_CHECKLIST.md`:
 
 Everything is prepared. Just follow the 4 steps above and you'll have a complete, professional competition submission.
 
-**Good luck with AWS 10,000 AIdeas 2026!** 🚀
+**Good luck with AWS 10,000 AIdeas 2025!** 🚀
 
 ---
 

@@ -215,7 +215,7 @@ https://github.com/Deeplomatcode/CivicGuardian-AI
 
 ---
 
-**🎉 Congratulations! Your CivicGuardian AI project is publication-ready and competing for AWS 10,000 AIdeas 2026 Finals!**
+**🎉 Congratulations! Your CivicGuardian AI project is publication-ready and competing for AWS 10,000 AIdeas 2025 Finals!**
 
 ---
 
