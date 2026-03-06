@@ -690,6 +690,12 @@ section {
     border-bottom: 1px solid var(--neutral-100);
 }
 
+.panel-header-right {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+}
+
 .panel-header h3 {
     font-size: var(--text-lg);
     font-weight: 800;
@@ -698,6 +704,49 @@ section {
     display: flex;
     align-items: center;
     gap: var(--space-2);
+}
+
+/* ============================================
+   AI THINKING INDICATOR
+   ============================================ */
+
+.ai-thinking-indicator {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+.thinking-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--gradient-primary);
+    animation: thinking-pulse 2s ease-in-out infinite;
+    box-shadow: var(--glow-gradient);
+}
+
+@keyframes thinking-pulse {
+    0%, 100% {
+        opacity: 1;
+        transform: scale(1);
+        box-shadow: var(--glow-gradient);
+    }
+    50% {
+        opacity: 0.7;
+        transform: scale(1.2);
+        box-shadow: 0 0 20px rgba(0, 255, 216, 0.6), 0 0 40px rgba(26, 115, 232, 0.4), 0 0 60px rgba(233, 30, 99, 0.3);
+    }
+}
+
+.thinking-text {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    font-weight: 600;
+    color: var(--accent-blue);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    opacity: 0.8;
+    white-space: nowrap;
 }
 
 .panel-body {
