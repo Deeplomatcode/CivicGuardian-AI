@@ -61,8 +61,8 @@
 
 ## 🎯 Competition Deadline
 
-**Submission Deadline:** March 13, 2026, 8:00 PM UTC
+**Submission Deadline:** March 13, 2025, 8:00 PM UTC
 
 **Days Remaining:** 9 days
 
-**Voting Period:** March 6-20, 2026
+**Voting Period:** March 6-20, 2025

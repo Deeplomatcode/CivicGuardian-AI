@@ -163,7 +163,7 @@ python3 -m http.server 8000
 
 ## License
 
-Part of CivicGuardian AI - AWS 10,000 AIdeas 2026 submission  
+Part of CivicGuardian AI - AWS 10,000 AIdeas 2025 submission  
 Team Phenix | Mohammed Bakare
 
 ---

@@ -247,6 +247,6 @@ Follow existing patterns:
 
 ---
 
-**Last Updated**: March 2026  
+**Last Updated**: March 2025  
 **Design Version**: 1.0  
 **Designer**: Kiro AI Assistant

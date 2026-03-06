@@ -151,7 +151,7 @@ mv ~/Desktop/Screenshot*.png article/
 ### 3. Rename Files
 ```bash
 cd article/
-mv Screenshot-2026-03-05-at-10.30.45.png screenshot-06-ui-overview.png
+mv Screenshot-2025-03-05-at-10.30.45.png screenshot-06-ui-overview.png
 # Repeat for each screenshot
 ```
 
@@ -259,7 +259,7 @@ Add screenshots after the "Demo: How It Works" section:
 
 **LinkedIn Post:**
 - Use screenshot-06-ui-overview.png as main image
-- Caption: "CivicGuardian AI in action: Three AI agents working together to prevent housing crises for vulnerable adults. Built with Amazon Bedrock Nova. #aideas2026 #socialimpact"
+- Caption: "CivicGuardian AI in action: Three AI agents working together to prevent housing crises for vulnerable adults. Built with Amazon Bedrock Nova. #aideas2025 #socialimpact"
 
 **Twitter/X Post:**
 - Use screenshot-07-risk-panel.png or screenshot-08-policy-panel.png

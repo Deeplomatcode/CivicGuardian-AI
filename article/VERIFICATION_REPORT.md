@@ -1,5 +1,5 @@
 # CivicGuardian AI Article Verification Report
-**Generated:** March 4, 2026  
+**Generated:** March 4, 2025  
 **Purpose:** Verify all claims in builder-center-article.md match actual implementation
 
 ---
