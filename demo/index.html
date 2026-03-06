@@ -7,16 +7,44 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
+    <!-- Demo Mode Banner -->
+    <div class="demo-banner">
+        <div class="demo-banner-content">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="8" x2="12" y2="12"></line>
+                <line x1="12" y1="16" x2="12.01" y2="16"></line>
+            </svg>
+            <span>Demo Mode — Synthetic examples only</span>
+        </div>
+    </div>
+
     <div class="container">
-        <header>
-            <h1>🛡️ CivicGuardian AI</h1>
-            <p class="subtitle">Caseworker Portal - Demo Interface</p>
+        <header class="app-header">
+            <div class="header-content">
+                <div class="logo-section">
+                    <div class="logo-icon">🛡️</div>
+                    <div class="logo-text">
+                        <h1>CivicGuardian AI</h1>
+                        <p class="subtitle">Caseworker Portal</p>
+                    </div>
+                </div>
+                <div class="header-meta">
+                    <span class="status-indicator">
+                        <span class="status-dot"></span>
+                        All systems operational
+                    </span>
+                </div>
+            </div>
         </header>
 
-        <main>
+        <main class="main-content">
             <!-- Upload Section -->
-            <section class="upload-section">
-                <h2>1. Upload Correspondence</h2>
+            <section class="card upload-section">
+                <div class="section-header">
+                    <h2>Upload Correspondence</h2>
+                    <span class="step-badge">Step 1</span>
+                </div>
                 <div class="upload-area" id="uploadArea">
                     <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
@@ -31,8 +59,11 @@
             </section>
 
             <!-- Document Preview -->
-            <section class="preview-section" id="previewSection" style="display: none;">
-                <h2>2. Document Preview</h2>
+            <section class="card preview-section" id="previewSection" style="display: none;">
+                <div class="section-header">
+                    <h2>Document Preview</h2>
+                    <span class="step-badge">Step 2</span>
+                </div>
                 <div class="document-preview">
                     <div class="preview-header">
                         <span class="file-name" id="fileName">sample-letter.txt</span>
@@ -48,10 +79,14 @@
 
             <!-- Results Section -->
             <section class="results-section" id="resultsSection" style="display: none;">
-                <h2>3. Analysis Results</h2>
+                <div class="section-header">
+                    <h2>Analysis Results</h2>
+                    <span class="step-badge">Step 3</span>
+                </div>
                 
+                <div class="results-grid">
                 <!-- Risk Assessment Panel -->
-                <div class="result-panel risk-panel">
+                <div class="card result-panel risk-panel">
                     <div class="panel-header">
                         <h3>🎯 Risk Assessment</h3>
                         <span class="badge" id="riskBadge">HIGH</span>
@@ -84,7 +119,7 @@
                 </div>
 
                 <!-- Policy Reasoner Panel -->
-                <div class="result-panel policy-panel">
+                <div class="card result-panel policy-panel">
                     <div class="panel-header">
                         <h3>📝 Draft Response</h3>
                         <span class="badge badge-success">GENERATED</span>
@@ -109,7 +144,7 @@
                 </div>
 
                 <!-- Governor Validation Panel -->
-                <div class="result-panel governor-panel">
+                <div class="card result-panel governor-panel">
                     <div class="panel-header">
                         <h3>✓ Validation Status</h3>
                         <span class="badge" id="validationBadge">APPROVED</span>
@@ -152,6 +187,9 @@
                     </div>
                 </div>
 
+                </div>
+                <!-- End results-grid -->
+
                 <!-- Action Buttons -->
                 <div class="action-buttons">
                     <button class="btn btn-secondary" id="resetBtn">Analyze Another Document</button>
@@ -160,9 +198,15 @@
             </section>
         </main>
 
-        <footer>
-            <p>CivicGuardian AI - AWS 10,000 AIdeas 2026 | Team Phenix</p>
-            <p class="demo-notice">Demo Interface - Using mock data for demonstration purposes</p>
+        <footer class="app-footer">
+            <div class="footer-content">
+                <p>CivicGuardian AI - AWS 10,000 AIdeas 2026 | Team Phenix</p>
+                <p class="footer-links">
+                    <a href="https://github.com/Deeplomatcode/CivicGuardian-AI" target="_blank">GitHub</a>
+                    <span>·</span>
+                    <a href="#" onclick="alert('Documentation coming soon'); return false;">Documentation</a>
+                </p>
+            </div>
         </footer>
     </div>
 
