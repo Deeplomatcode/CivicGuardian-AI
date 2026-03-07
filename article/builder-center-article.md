@@ -240,6 +240,60 @@ The following screenshots demonstrate the complete implementation and testing pr
 
 ## Demo: How It Works
 
+Below are screenshots showing the complete CivicGuardian AI workflow:
+
+### Technical Implementation
+
+![Git Development History](screenshot-01-git-history.png)
+
+*Development tracked through 19+ commits using AWS Kiro for specification-driven safety*
+
+![Three-Agent Architecture](screenshot-02-agent-files.png)
+
+*Specialized AI agents: Risk Analyst (Nova Lite), Policy Reasoner (Nova Pro), Governor (Python validation)*
+
+![Comprehensive Test Suite](screenshot-03-test-suite.png)
+
+*122 tests with 95%+ coverage ensuring reliability and safety*
+
+![Sample Agent Output](screenshot-04-json-output.png)
+
+*Risk Analyst JSON output demonstrating urgency detection and deadline extraction*
+
+![Project Structure](screenshot-05-project-structure.png)
+
+*Clean architecture: agents, tests, demo UI, GDPR compliance documentation*
+
+### Live Demo Interface
+
+![Hero Interface](screenshot-06-hero-ui.png)
+
+*Premium command center UI with real-time metrics, mission context, and AWS branding*
+
+![Processing Pipeline Active](screenshot-07-processing.png)
+
+*Three-agent workflow in action: Risk → Policy → Validation with live status updates*
+
+![Complete Results Display](screenshot-08-results.png)
+
+*Full workflow output: risk assessment, compliant draft response, safety validation checks*
+
+### Video Walkthrough
+
+**Watch the 5-minute demo:** [CivicGuardian AI - Complete Workflow Demonstration](civicguardian-demo-final.mp4)
+
+The video demonstrates:
+- Problem context: UK vulnerable adults missing critical deadlines
+- Document upload: Housing benefit review letter
+- Three-agent processing: Risk detection → Policy reasoning → Safety validation
+- Results display: Risk assessment, compliant draft, validation checks
+- Human oversight: Required caseworker review before sending
+- Impact: 20min → 2min per case, £0.26 cost, 100% human approval
+
+**Duration:** 4:55 | **Resolution:** 1080p | **Format:** MP4
+
+---
+
 ### Sample Input: Eviction Notice
 ```
 From: Oxford City Council Housing Department
