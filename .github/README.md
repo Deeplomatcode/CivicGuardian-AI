@@ -20,7 +20,7 @@ Multi-agent AI system that monitors correspondence, identifies urgent risks, and
 ## 📊 Impact
 
 - Target: <5% missed deadlines (down from 15%)
-- Cost: $0.26 per case (sustainable at scale)
+- Cost Efficiency: per case (sustainable at scale)
 - Capacity: 1,000 cases/month on AWS Free Tier
 
 ## 🔒 Privacy & Security
