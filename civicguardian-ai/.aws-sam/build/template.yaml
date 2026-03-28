@@ -1,0 +1,934 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: "CivicGuardian AI \u2014 Complete backend infrastructure. Services: Lambda,\
+  \ Step Functions, S3, DynamoDB, SNS, API Gateway, CloudWatch, IAM, Budgets, Textract,\
+  \ Transcribe, Bedrock.\n"
+Parameters:
+  CaseworkerEmail:
+    Type: String
+    Description: Email address for SNS alerts and budget notifications
+    Default: deeplomatawslearning@gmail.com
+  ApiGatewayUrl:
+    Type: String
+    Description: Base URL of this API Gateway (filled after first deploy)
+    Default: https://2w6h0znfwj.execute-api.eu-west-2.amazonaws.com/prod
+Globals:
+  Function:
+    Runtime: python3.12
+    Tracing: Active
+    Environment:
+      Variables:
+        TABLE_NAME:
+          Ref: CivicGuardianCasesTable
+        INBOX_BUCKET:
+          Ref: InboxBucket
+        PROCESSED_BUCKET:
+          Ref: ProcessedBucket
+        SNS_TOPIC_ARN:
+          Ref: CivicGuardianAlertsTopic
+        API_GATEWAY_URL:
+          Ref: ApiGatewayUrl
+Resources:
+  CivicGuardianCasesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: CivicGuardianCases
+      BillingMode: PAY_PER_REQUEST
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      TimeToLiveSpecification:
+        AttributeName: expires_at
+        Enabled: true
+      AttributeDefinitions:
+      - AttributeName: case_id
+        AttributeType: S
+      - AttributeName: created_at
+        AttributeType: S
+      KeySchema:
+      - AttributeName: case_id
+        KeyType: HASH
+      - AttributeName: created_at
+        KeyType: RANGE
+      SSESpecification:
+        SSEEnabled: true
+  InboxBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: civicguardian-inbox
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+        - ServerSideEncryptionByDefault:
+            SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      CorsConfiguration:
+        CorsRules:
+        - AllowedHeaders:
+          - '*'
+          AllowedMethods:
+          - PUT
+          - POST
+          AllowedOrigins:
+          - '*'
+          MaxAge: 3000
+      LifecycleConfiguration:
+        Rules:
+        - Id: GlacierAfter90Days
+          Status: Enabled
+          Transitions:
+          - TransitionInDays: 90
+            StorageClass: GLACIER
+          ExpirationInDays: 2555
+  ProcessedBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: civicguardian-processed
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+        - ServerSideEncryptionByDefault:
+            SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+        - Id: GlacierAfter90Days
+          Status: Enabled
+          Transitions:
+          - TransitionInDays: 90
+            StorageClass: GLACIER
+          ExpirationInDays: 2555
+  InboxBucketInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName:
+        Fn::GetAtt:
+        - IngestHandlerFunction
+        - Arn
+      Action: lambda:InvokeFunction
+      Principal: s3.amazonaws.com
+      SourceAccount:
+        Ref: AWS::AccountId
+  CivicGuardianAlertsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: CivicGuardianAlerts
+  CaseworkerEmailSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn:
+        Ref: CivicGuardianAlertsTopic
+      Protocol: email
+      Endpoint:
+        Ref: CaseworkerEmail
+  IngestHandlerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName:
+        Fn::Sub: civicguardian-ingest-role-${AWS::StackName}
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: lambda.amazonaws.com
+          Action: sts:AssumeRole
+      ManagedPolicyArns:
+      - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
+      Policies:
+      - PolicyName: IngestHandlerPolicy
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - s3:GetObject
+            - s3:GetObjectVersion
+            Resource:
+              Fn::Sub: arn:aws:s3:::civicguardian-inbox/*
+          - Effect: Allow
+            Action:
+            - s3:PutObject
+            Resource:
+            - Fn::Sub: arn:aws:s3:::civicguardian-processed/*
+            - Fn::Sub: arn:aws:s3:::civicguardian-inbox/transcripts/*
+            - Fn::Sub: arn:aws:s3:::civicguardian-processed/quarantine/*
+          - Effect: Allow
+            Action:
+            - dynamodb:PutItem
+            - dynamodb:UpdateItem
+            Resource:
+              Fn::GetAtt:
+              - CivicGuardianCasesTable
+              - Arn
+          - Effect: Allow
+            Action:
+            - states:StartExecution
+            Resource:
+              Fn::Sub: arn:aws:states:${AWS::Region}:${AWS::AccountId}:stateMachine:GuardianLoop
+          - Effect: Allow
+            Action:
+            - textract:DetectDocumentText
+            Resource: '*'
+          - Effect: Allow
+            Action:
+            - transcribe:StartTranscriptionJob
+            - transcribe:GetTranscriptionJob
+            Resource: '*'
+          - Effect: Allow
+            Action:
+            - cloudwatch:PutMetricData
+            Resource: '*'
+            Condition:
+              StringEquals:
+                cloudwatch:namespace: CivicGuardian/Performance
+  RiskAnalystRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName:
+        Fn::Sub: civicguardian-risk-role-${AWS::StackName}
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: lambda.amazonaws.com
+          Action: sts:AssumeRole
+      ManagedPolicyArns:
+      - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
+      Policies:
+      - PolicyName: RiskAnalystPolicy
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - bedrock:InvokeModel
+            Resource:
+              Fn::Sub: arn:aws:bedrock:${AWS::Region}::foundation-model/amazon.nova-lite-v1:0
+          - Effect: Allow
+            Action:
+            - dynamodb:GetItem
+            - dynamodb:UpdateItem
+            Resource:
+              Fn::GetAtt:
+              - CivicGuardianCasesTable
+              - Arn
+          - Effect: Allow
+            Action:
+            - cloudwatch:PutMetricData
+            Resource: '*'
+            Condition:
+              StringEquals:
+                cloudwatch:namespace: CivicGuardian/Performance
+  PolicyReasonerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName:
+        Fn::Sub: civicguardian-policy-role-${AWS::StackName}
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: lambda.amazonaws.com
+          Action: sts:AssumeRole
+      ManagedPolicyArns:
+      - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
+      Policies:
+      - PolicyName: PolicyReasonerPolicy
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - bedrock:InvokeModel
+            Resource:
+              Fn::Sub: arn:aws:bedrock:${AWS::Region}::foundation-model/amazon.nova-pro-v1:0
+          - Effect: Allow
+            Action:
+            - dynamodb:GetItem
+            - dynamodb:UpdateItem
+            Resource:
+              Fn::GetAtt:
+              - CivicGuardianCasesTable
+              - Arn
+          - Effect: Allow
+            Action:
+            - cloudwatch:PutMetricData
+            Resource: '*'
+            Condition:
+              StringEquals:
+                cloudwatch:namespace: CivicGuardian/Performance
+  GovernorRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName:
+        Fn::Sub: civicguardian-governor-role-${AWS::StackName}
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: lambda.amazonaws.com
+          Action: sts:AssumeRole
+      ManagedPolicyArns:
+      - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
+      Policies:
+      - PolicyName: GovernorPolicy
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - bedrock:InvokeModel
+            Resource:
+              Fn::Sub: arn:aws:bedrock:${AWS::Region}::foundation-model/amazon.nova-lite-v1:0
+          - Effect: Allow
+            Action:
+            - dynamodb:GetItem
+            - dynamodb:UpdateItem
+            Resource:
+              Fn::GetAtt:
+              - CivicGuardianCasesTable
+              - Arn
+          - Effect: Allow
+            Action:
+            - cloudwatch:PutMetricData
+            Resource: '*'
+            Condition:
+              StringEquals:
+                cloudwatch:namespace: CivicGuardian/Performance
+  EscalationRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName:
+        Fn::Sub: civicguardian-escalation-role-${AWS::StackName}
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: lambda.amazonaws.com
+          Action: sts:AssumeRole
+      ManagedPolicyArns:
+      - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
+      Policies:
+      - PolicyName: EscalationPolicy
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - sns:Publish
+            Resource:
+              Ref: CivicGuardianAlertsTopic
+          - Effect: Allow
+            Action:
+            - dynamodb:GetItem
+            - dynamodb:UpdateItem
+            - dynamodb:Query
+            Resource:
+              Fn::GetAtt:
+              - CivicGuardianCasesTable
+              - Arn
+          - Effect: Allow
+            Action:
+            - states:SendTaskSuccess
+            - states:SendTaskFailure
+            Resource:
+              Fn::Sub: arn:aws:states:${AWS::Region}:${AWS::AccountId}:stateMachine:GuardianLoop
+          - Effect: Allow
+            Action:
+            - s3:PutObject
+            - s3:CopyObject
+            Resource:
+              Fn::Sub: arn:aws:s3:::civicguardian-processed/*
+          - Effect: Allow
+            Action:
+            - cloudwatch:PutMetricData
+            Resource: '*'
+            Condition:
+              StringEquals:
+                cloudwatch:namespace: CivicGuardian/Performance
+  IngestHandlerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: civicguardian-ingest-handler
+      CodeUri: IngestHandlerFunction
+      Handler: handler.lambda_handler
+      MemorySize: 512
+      Timeout: 60
+      Role:
+        Fn::GetAtt:
+        - IngestHandlerRole
+        - Arn
+      Environment:
+        Variables:
+          STATE_MACHINE_ARN:
+            Fn::Sub: arn:aws:states:${AWS::Region}:${AWS::AccountId}:stateMachine:GuardianLoop
+    Metadata:
+      SamResourceId: IngestHandlerFunction
+  RiskAnalystFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: civicguardian-risk-analyst
+      CodeUri: RiskAnalystFunction
+      Handler: handler.lambda_handler
+      MemorySize: 256
+      Timeout: 30
+      Role:
+        Fn::GetAtt:
+        - RiskAnalystRole
+        - Arn
+    Metadata:
+      SamResourceId: RiskAnalystFunction
+  PolicyReasonerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: civicguardian-policy-reasoner
+      CodeUri: PolicyReasonerFunction
+      Handler: handler.lambda_handler
+      MemorySize: 256
+      Timeout: 60
+      Role:
+        Fn::GetAtt:
+        - PolicyReasonerRole
+        - Arn
+    Metadata:
+      SamResourceId: PolicyReasonerFunction
+  GovernorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: civicguardian-governor
+      CodeUri: GovernorFunction
+      Handler: handler.lambda_handler
+      MemorySize: 256
+      Timeout: 30
+      Role:
+        Fn::GetAtt:
+        - GovernorRole
+        - Arn
+    Metadata:
+      SamResourceId: GovernorFunction
+  EscalationFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: civicguardian-escalation
+      CodeUri: EscalationFunction
+      Handler: handler.lambda_handler
+      MemorySize: 256
+      Timeout: 15
+      Role:
+        Fn::GetAtt:
+        - EscalationRole
+        - Arn
+    Metadata:
+      SamResourceId: EscalationFunction
+  StepFunctionsRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName:
+        Fn::Sub: civicguardian-sfn-role-${AWS::StackName}
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: states.amazonaws.com
+          Action: sts:AssumeRole
+      Policies:
+      - PolicyName: SFNInvokeLambda
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - lambda:InvokeFunction
+            Resource:
+            - Fn::Sub: arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:civicguardian-risk-analyst
+            - Fn::Sub: arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:civicguardian-policy-reasoner
+            - Fn::Sub: arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:civicguardian-governor
+            - Fn::Sub: arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:civicguardian-escalation
+  GuardianLoopStateMachine:
+    Type: AWS::StepFunctions::StateMachine
+    Properties:
+      StateMachineName: GuardianLoop
+      StateMachineType: STANDARD
+      RoleArn:
+        Fn::GetAtt:
+        - StepFunctionsRole
+        - Arn
+      DefinitionSubstitutions:
+        RiskAnalystFunctionArn:
+          Fn::Sub: arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:civicguardian-risk-analyst
+        PolicyReasonerFunctionArn:
+          Fn::Sub: arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:civicguardian-policy-reasoner
+        GovernorFunctionArn:
+          Fn::Sub: arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:civicguardian-governor
+        EscalationFunctionArn:
+          Fn::Sub: arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:civicguardian-escalation
+      Definition:
+        Comment: "CivicGuardian GuardianLoop \u2014 Standard Workflow"
+        StartAt: IngestComplete
+        States:
+          IngestComplete:
+            Type: Pass
+            Next: RunRiskAnalyst
+          RunRiskAnalyst:
+            Type: Task
+            Resource: ${RiskAnalystFunctionArn}
+            ResultPath: $.risk_result
+            Retry:
+            - ErrorEquals:
+              - Lambda.ServiceException
+              - Lambda.TooManyRequestsException
+              - Lambda.AWSLambdaException
+              IntervalSeconds: 2
+              MaxAttempts: 3
+              BackoffRate: 2
+            Catch:
+            - ErrorEquals:
+              - States.ALL
+              ResultPath: $.error
+              Next: EscalateForApproval
+            Next: CostGate
+          CostGate:
+            Type: Choice
+            Choices:
+            - Variable: $.risk_result.risk_level
+              StringEquals: LOW
+              Next: ArchiveCase
+            - Variable: $.risk_result.risk_level
+              StringEquals: MEDIUM
+              Next: RunPolicyReasoner
+            - Variable: $.risk_result.risk_level
+              StringEquals: HIGH
+              Next: RunPolicyReasoner
+            - Variable: $.risk_result.risk_level
+              StringEquals: CRITICAL
+              Next: RunPolicyReasoner
+            Default: EscalateForApproval
+          RunPolicyReasoner:
+            Type: Task
+            Resource: ${PolicyReasonerFunctionArn}
+            Parameters:
+              case_id.$: $.case_id
+              created_at.$: $.created_at
+              risk_level.$: $.risk_result.risk_level
+              deadline.$: $.risk_result.deadline
+              required_action.$: $.risk_result.required_action
+              sender_authority.$: $.risk_result.sender_authority
+            ResultPath: $.policy_result
+            Retry:
+            - ErrorEquals:
+              - Lambda.ServiceException
+              - Lambda.TooManyRequestsException
+              - Lambda.AWSLambdaException
+              IntervalSeconds: 2
+              MaxAttempts: 3
+              BackoffRate: 2
+            Catch:
+            - ErrorEquals:
+              - States.ALL
+              ResultPath: $.error
+              Next: EscalateForApproval
+            Next: RunGovernor
+          RunGovernor:
+            Type: Task
+            Resource: ${GovernorFunctionArn}
+            Parameters:
+              case_id.$: $.case_id
+              created_at.$: $.created_at
+              risk_level.$: $.risk_result.risk_level
+              deadline.$: $.risk_result.deadline
+            ResultPath: $.governor_result
+            Retry:
+            - ErrorEquals:
+              - Lambda.ServiceException
+              - Lambda.TooManyRequestsException
+              - Lambda.AWSLambdaException
+              IntervalSeconds: 2
+              MaxAttempts: 3
+              BackoffRate: 2
+            Catch:
+            - ErrorEquals:
+              - States.ALL
+              ResultPath: $.error
+              Next: EscalateForApproval
+            Next: ConfidenceGate
+          ConfidenceGate:
+            Type: Choice
+            Choices:
+            - Variable: $.governor_result.approved
+              BooleanEquals: false
+              Next: EscalateForApproval
+            - Variable: $.governor_result.confidence_score
+              NumericLessThan: 0.75
+              Next: EscalateForApproval
+            Default: CheckCritical
+          CheckCritical:
+            Type: Choice
+            Choices:
+            - Variable: $.risk_result.risk_level
+              StringEquals: CRITICAL
+              Next: EscalateForApproval
+            - Variable: $.risk_result.risk_level
+              StringEquals: HIGH
+              Next: EscalateForApproval
+            - And:
+              - Variable: $.risk_result.risk_level
+                StringEquals: MEDIUM
+              - Variable: $.governor_result.confidence_score
+                NumericGreaterThanEquals: 0.9
+              Next: ArchiveCase
+            Default: EscalateForApproval
+          EscalateForApproval:
+            Type: Task
+            Resource: arn:aws:states:::lambda:invoke.waitForTaskToken
+            Parameters:
+              FunctionName: ${EscalationFunctionArn}
+              Payload:
+                task_token.$: $$.Task.Token
+                case_id.$: $.case_id
+                created_at.$: $.created_at
+                risk_level.$: $.risk_result.risk_level
+                deadline.$: $.risk_result.deadline
+                required_action.$: $.risk_result.required_action
+            HeartbeatSeconds: 604800
+            ResultPath: $.approval_result
+            Retry:
+            - ErrorEquals:
+              - Lambda.ServiceException
+              - Lambda.TooManyRequestsException
+              IntervalSeconds: 2
+              MaxAttempts: 3
+              BackoffRate: 2
+            Catch:
+            - ErrorEquals:
+              - CaseworkerRejected
+              ResultPath: $.rejection
+              Next: CaseRejected
+            - ErrorEquals:
+              - States.HeartbeatTimeout
+              ResultPath: $.timeout_error
+              Next: CaseRejected
+            Next: ArchiveCase
+          ArchiveCase:
+            Type: Task
+            Resource: ${EscalationFunctionArn}
+            Parameters:
+              operation: archive
+              case_id.$: $.case_id
+              created_at.$: $.created_at
+              risk_level.$: $.risk_result.risk_level
+            ResultPath: $.archive_result
+            Retry:
+            - ErrorEquals:
+              - Lambda.ServiceException
+              - Lambda.TooManyRequestsException
+              IntervalSeconds: 2
+              MaxAttempts: 3
+              BackoffRate: 2
+            Next: CaseClosed
+          CaseRejected:
+            Type: Task
+            Resource: ${EscalationFunctionArn}
+            Parameters:
+              operation: reject
+              case_id.$: $.case_id
+              created_at.$: $.created_at
+            ResultPath: $.reject_result
+            Retry:
+            - ErrorEquals:
+              - Lambda.ServiceException
+              - Lambda.TooManyRequestsException
+              IntervalSeconds: 2
+              MaxAttempts: 3
+              BackoffRate: 2
+            Next: CaseClosed
+          CaseClosed:
+            Type: Succeed
+  CivicGuardianApi:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: CivicGuardianAPI
+      Description: CivicGuardian approve/reject/presign endpoints
+  ApiApproveResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId:
+        Ref: CivicGuardianApi
+      ParentId:
+        Fn::GetAtt:
+        - CivicGuardianApi
+        - RootResourceId
+      PathPart: approve
+  ApiRejectResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId:
+        Ref: CivicGuardianApi
+      ParentId:
+        Fn::GetAtt:
+        - CivicGuardianApi
+        - RootResourceId
+      PathPart: reject
+  ApiPresignResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId:
+        Ref: CivicGuardianApi
+      ParentId:
+        Fn::GetAtt:
+        - CivicGuardianApi
+        - RootResourceId
+      PathPart: presign
+  ApiApproveMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId:
+        Ref: CivicGuardianApi
+      ResourceId:
+        Ref: ApiApproveResource
+      HttpMethod: POST
+      AuthorizationType: NONE
+      ApiKeyRequired: false
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri:
+          Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${EscalationFunction.Arn}/invocations
+  ApiRejectMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId:
+        Ref: CivicGuardianApi
+      ResourceId:
+        Ref: ApiRejectResource
+      HttpMethod: POST
+      AuthorizationType: NONE
+      ApiKeyRequired: false
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri:
+          Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${EscalationFunction.Arn}/invocations
+  ApiPresignMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId:
+        Ref: CivicGuardianApi
+      ResourceId:
+        Ref: ApiPresignResource
+      HttpMethod: GET
+      AuthorizationType: NONE
+      ApiKeyRequired: true
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri:
+          Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${EscalationFunction.Arn}/invocations
+  ApiDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+    - ApiApproveMethod
+    - ApiRejectMethod
+    - ApiPresignMethod
+    Properties:
+      RestApiId:
+        Ref: CivicGuardianApi
+  ApiStage:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      RestApiId:
+        Ref: CivicGuardianApi
+      DeploymentId:
+        Ref: ApiDeployment
+      StageName: prod
+  ApiKey:
+    Type: AWS::ApiGateway::ApiKey
+    DependsOn: ApiStage
+    Properties:
+      Name: CivicGuardianApiKey
+      Enabled: true
+      StageKeys:
+      - RestApiId:
+          Ref: CivicGuardianApi
+        StageName: prod
+  ApiUsagePlan:
+    Type: AWS::ApiGateway::UsagePlan
+    DependsOn: ApiStage
+    Properties:
+      UsagePlanName: CivicGuardianUsagePlan
+      ApiStages:
+      - ApiId:
+          Ref: CivicGuardianApi
+        Stage: prod
+      Quota:
+        Limit: 1000
+        Period: DAY
+      Throttle:
+        BurstLimit: 50
+        RateLimit: 10
+  ApiUsagePlanKey:
+    Type: AWS::ApiGateway::UsagePlanKey
+    Properties:
+      KeyId:
+        Ref: ApiKey
+      KeyType: API_KEY
+      UsagePlanId:
+        Ref: ApiUsagePlan
+  EscalationFunctionApiPermissionApprove:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName:
+        Fn::GetAtt:
+        - EscalationFunction
+        - Arn
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn:
+        Fn::Sub: arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${CivicGuardianApi}/*/POST/approve
+  EscalationFunctionApiPermissionReject:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName:
+        Fn::GetAtt:
+        - EscalationFunction
+        - Arn
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn:
+        Fn::Sub: arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${CivicGuardianApi}/*/POST/reject
+  EscalationFunctionApiPermissionPresign:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName:
+        Fn::GetAtt:
+        - EscalationFunction
+        - Arn
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn:
+        Fn::Sub: arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${CivicGuardianApi}/*/GET/presign
+  ApiGatewayLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /aws/apigateway/civicguardian
+      RetentionInDays: 30
+  IngestLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /aws/lambda/civicguardian-ingest-handler
+      RetentionInDays: 30
+  RiskAnalystLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /aws/lambda/civicguardian-risk-analyst
+      RetentionInDays: 30
+  PolicyReasonerLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /aws/lambda/civicguardian-policy-reasoner
+      RetentionInDays: 30
+  GovernorLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /aws/lambda/civicguardian-governor
+      RetentionInDays: 30
+  EscalationLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /aws/lambda/civicguardian-escalation
+      RetentionInDays: 30
+  NovaProInvocationsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: CivicGuardian-NovaProInvocations-High
+      AlarmDescription: "Nova Pro invocations exceeded 300 in 24 hours \u2014 cost\
+        \ control alert"
+      Namespace: CivicGuardian/Performance
+      MetricName: NovaProInvocations
+      Statistic: Sum
+      Period: 86400
+      EvaluationPeriods: 1
+      Threshold: 300
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+      - Ref: CivicGuardianAlertsTopic
+      TreatMissingData: notBreaching
+  CivicGuardianDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: CivicGuardian-Performance
+      DashboardBody:
+        Fn::Sub: "{\n  \"widgets\": [\n    {\n      \"type\": \"metric\",\n      \"\
+          x\": 0, \"y\": 0, \"width\": 12, \"height\": 6,\n      \"properties\": {\n\
+          \        \"title\": \"Lambda Invocations\",\n        \"region\": \"${AWS::Region}\"\
+          ,\n        \"metrics\": [\n          [\"AWS/Lambda\", \"Invocations\", \"\
+          FunctionName\", \"civicguardian-ingest-handler\"],\n          [\"AWS/Lambda\"\
+          , \"Invocations\", \"FunctionName\", \"civicguardian-risk-analyst\"],\n\
+          \          [\"AWS/Lambda\", \"Invocations\", \"FunctionName\", \"civicguardian-policy-reasoner\"\
+          ],\n          [\"AWS/Lambda\", \"Invocations\", \"FunctionName\", \"civicguardian-governor\"\
+          ],\n          [\"AWS/Lambda\", \"Invocations\", \"FunctionName\", \"civicguardian-escalation\"\
+          ]\n        ],\n        \"period\": 3600,\n        \"stat\": \"Sum\",\n \
+          \       \"view\": \"timeSeries\"\n      }\n    },\n    {\n      \"type\"\
+          : \"metric\",\n      \"x\": 12, \"y\": 0, \"width\": 12, \"height\": 6,\n\
+          \      \"properties\": {\n        \"title\": \"Lambda Errors\",\n      \
+          \  \"region\": \"${AWS::Region}\",\n        \"metrics\": [\n          [\"\
+          AWS/Lambda\", \"Errors\", \"FunctionName\", \"civicguardian-ingest-handler\"\
+          ],\n          [\"AWS/Lambda\", \"Errors\", \"FunctionName\", \"civicguardian-risk-analyst\"\
+          ],\n          [\"AWS/Lambda\", \"Errors\", \"FunctionName\", \"civicguardian-policy-reasoner\"\
+          ],\n          [\"AWS/Lambda\", \"Errors\", \"FunctionName\", \"civicguardian-governor\"\
+          ],\n          [\"AWS/Lambda\", \"Errors\", \"FunctionName\", \"civicguardian-escalation\"\
+          ]\n        ],\n        \"period\": 3600,\n        \"stat\": \"Sum\",\n \
+          \       \"view\": \"timeSeries\"\n      }\n    },\n    {\n      \"type\"\
+          : \"metric\",\n      \"x\": 0, \"y\": 6, \"width\": 12, \"height\": 6,\n\
+          \      \"properties\": {\n        \"title\": \"Nova Pro vs Nova Lite Invocations\"\
+          ,\n        \"region\": \"${AWS::Region}\",\n        \"metrics\": [\n   \
+          \       [\"CivicGuardian/Performance\", \"NovaProInvocations\"],\n     \
+          \     [\"CivicGuardian/Performance\", \"NovaLiteInvocations\"]\n       \
+          \ ],\n        \"period\": 3600,\n        \"stat\": \"Sum\",\n        \"\
+          view\": \"timeSeries\"\n      }\n    },\n    {\n      \"type\": \"metric\"\
+          ,\n      \"x\": 12, \"y\": 6, \"width\": 12, \"height\": 6,\n      \"properties\"\
+          : {\n        \"title\": \"Cost Per Case (USD)\",\n        \"region\": \"\
+          ${AWS::Region}\",\n        \"metrics\": [\n          [\"CivicGuardian/Performance\"\
+          , \"CostPerCase\"]\n        ],\n        \"period\": 86400,\n        \"stat\"\
+          : \"Sum\",\n        \"view\": \"timeSeries\"\n      }\n    }\n  ]\n}\n"
+Outputs:
+  ApiGatewayBaseUrl:
+    Description: "Base URL for API Gateway \u2014 use this as ApiGatewayUrl parameter\
+      \ on redeploy"
+    Value:
+      Fn::Sub: https://${CivicGuardianApi}.execute-api.${AWS::Region}.amazonaws.com/prod
+  StateMachineArn:
+    Description: GuardianLoop Step Functions ARN
+    Value:
+      Ref: GuardianLoopStateMachine
+  InboxBucketName:
+    Description: S3 inbox bucket for document uploads
+    Value:
+      Ref: InboxBucket
+  ProcessedBucketName:
+    Description: S3 processed bucket for outputs
+    Value:
+      Ref: ProcessedBucket
+  DynamoTableName:
+    Description: DynamoDB table name
+    Value:
+      Ref: CivicGuardianCasesTable

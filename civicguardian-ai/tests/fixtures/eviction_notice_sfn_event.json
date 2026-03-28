@@ -1,0 +1,7 @@
+{
+  "case_id": "test-eviction-001",
+  "created_at": "2026-03-14T10:00:00+00:00",
+  "file_key": "eviction_notice.txt",
+  "file_type": "email",
+  "sender_authority": "Oxford City Council"
+}

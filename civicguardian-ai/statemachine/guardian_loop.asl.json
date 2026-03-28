@@ -1,0 +1,261 @@
+{
+  "Comment": "CivicGuardian GuardianLoop — Standard Workflow. Orchestrates risk analysis, policy reasoning, governor validation, and human escalation for vulnerable adult correspondence.",
+  "StartAt": "IngestComplete",
+  "States": {
+
+    "IngestComplete": {
+      "Comment": "Entry point — case has been written to DynamoDB by ingest_handler. Pass through case metadata.",
+      "Type": "Pass",
+      "Next": "RunRiskAnalyst"
+    },
+
+    "RunRiskAnalyst": {
+      "Comment": "Invoke risk_analyst_handler via Nova Lite. Returns risk_level, deadline, required_action, confidence.",
+      "Type": "Task",
+      "Resource": "${RiskAnalystFunctionArn}",
+      "ResultPath": "$.risk_result",
+      "Retry": [
+        {
+          "ErrorEquals": ["Lambda.ServiceException", "Lambda.TooManyRequestsException", "Lambda.AWSLambdaException"],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "EscalateForApproval"
+        }
+      ],
+      "Next": "CostGate"
+    },
+
+    "CostGate": {
+      "Comment": "Branch on risk_level. LOW → ArchiveCase (Nova Pro never called). MEDIUM/HIGH/CRITICAL → RunPolicyReasoner.",
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.risk_result.risk_level",
+          "StringEquals": "LOW",
+          "Next": "ArchiveCase"
+        },
+        {
+          "Variable": "$.risk_result.risk_level",
+          "StringEquals": "MEDIUM",
+          "Next": "RunPolicyReasoner"
+        },
+        {
+          "Variable": "$.risk_result.risk_level",
+          "StringEquals": "HIGH",
+          "Next": "RunPolicyReasoner"
+        },
+        {
+          "Variable": "$.risk_result.risk_level",
+          "StringEquals": "CRITICAL",
+          "Next": "RunPolicyReasoner"
+        }
+      ],
+      "Default": "EscalateForApproval"
+    },
+
+    "RunPolicyReasoner": {
+      "Comment": "Invoke policy_reasoner_handler via Nova Pro. Only reached for MEDIUM/HIGH/CRITICAL.",
+      "Type": "Task",
+      "Resource": "${PolicyReasonerFunctionArn}",
+      "Parameters": {
+        "case_id.$": "$.case_id",
+        "created_at.$": "$.created_at",
+        "risk_level.$": "$.risk_result.risk_level",
+        "deadline.$": "$.risk_result.deadline",
+        "required_action.$": "$.risk_result.required_action",
+        "sender_authority.$": "$.risk_result.sender_authority"
+      },
+      "ResultPath": "$.policy_result",
+      "Retry": [
+        {
+          "ErrorEquals": ["Lambda.ServiceException", "Lambda.TooManyRequestsException", "Lambda.AWSLambdaException"],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "EscalateForApproval"
+        }
+      ],
+      "Next": "RunGovernor"
+    },
+
+    "RunGovernor": {
+      "Comment": "Invoke governor_handler via Nova Lite. Validates draft for factual accuracy, legal soundness, tone, deadline logic.",
+      "Type": "Task",
+      "Resource": "${GovernorFunctionArn}",
+      "Parameters": {
+        "case_id.$": "$.case_id",
+        "created_at.$": "$.created_at",
+        "risk_level.$": "$.risk_result.risk_level",
+        "deadline.$": "$.risk_result.deadline"
+      },
+      "ResultPath": "$.governor_result",
+      "Retry": [
+        {
+          "ErrorEquals": ["Lambda.ServiceException", "Lambda.TooManyRequestsException", "Lambda.AWSLambdaException"],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "EscalateForApproval"
+        }
+      ],
+      "Next": "ConfidenceGate"
+    },
+
+    "ConfidenceGate": {
+      "Comment": "If governor vetoed (approved=false) OR confidence < 0.75 → escalate immediately.",
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.governor_result.approved",
+          "BooleanEquals": false,
+          "Next": "EscalateForApproval"
+        },
+        {
+          "Variable": "$.governor_result.confidence_score",
+          "NumericLessThan": 0.75,
+          "Next": "EscalateForApproval"
+        }
+      ],
+      "Default": "CheckCritical"
+    },
+
+    "CheckCritical": {
+      "Comment": "CRITICAL and HIGH always escalate. MEDIUM with confidence >= 0.90 auto-archives.",
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.risk_result.risk_level",
+          "StringEquals": "CRITICAL",
+          "Next": "EscalateForApproval"
+        },
+        {
+          "Variable": "$.risk_result.risk_level",
+          "StringEquals": "HIGH",
+          "Next": "EscalateForApproval"
+        },
+        {
+          "And": [
+            {
+              "Variable": "$.risk_result.risk_level",
+              "StringEquals": "MEDIUM"
+            },
+            {
+              "Variable": "$.governor_result.confidence_score",
+              "NumericGreaterThanEquals": 0.90
+            }
+          ],
+          "Next": "ArchiveCase"
+        }
+      ],
+      "Default": "EscalateForApproval"
+    },
+
+    "EscalateForApproval": {
+      "Comment": "Call escalation_handler with task token. Execution pauses here up to 7 days waiting for caseworker.",
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke.waitForTaskToken",
+      "Parameters": {
+        "FunctionName": "${EscalationFunctionArn}",
+        "Payload": {
+          "task_token.$": "$$.Task.Token",
+          "case_id.$": "$.case_id",
+          "created_at.$": "$.created_at",
+          "risk_level.$": "$.risk_result.risk_level",
+          "deadline.$": "$.risk_result.deadline",
+          "required_action.$": "$.risk_result.required_action"
+        }
+      },
+      "HeartbeatSeconds": 604800,
+      "ResultPath": "$.approval_result",
+      "Retry": [
+        {
+          "ErrorEquals": ["Lambda.ServiceException", "Lambda.TooManyRequestsException"],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["CaseworkerRejected"],
+          "ResultPath": "$.rejection",
+          "Next": "CaseRejected"
+        },
+        {
+          "ErrorEquals": ["States.HeartbeatTimeout"],
+          "ResultPath": "$.timeout_error",
+          "Next": "CaseRejected"
+        }
+      ],
+      "Next": "ArchiveCase"
+    },
+
+    "ArchiveCase": {
+      "Comment": "Write final APPROVED/ARCHIVED status to DynamoDB. Copy draft to civicguardian-processed/approved/.",
+      "Type": "Task",
+      "Resource": "${EscalationFunctionArn}",
+      "Parameters": {
+        "operation": "archive",
+        "case_id.$": "$.case_id",
+        "created_at.$": "$.created_at",
+        "risk_level.$": "$.risk_result.risk_level"
+      },
+      "ResultPath": "$.archive_result",
+      "Retry": [
+        {
+          "ErrorEquals": ["Lambda.ServiceException", "Lambda.TooManyRequestsException"],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
+      "Next": "CaseClosed"
+    },
+
+    "CaseRejected": {
+      "Comment": "Write REJECTED status to DynamoDB. Fire SNS alert for manual review.",
+      "Type": "Task",
+      "Resource": "${EscalationFunctionArn}",
+      "Parameters": {
+        "operation": "reject",
+        "case_id.$": "$.case_id",
+        "created_at.$": "$.created_at"
+      },
+      "ResultPath": "$.reject_result",
+      "Retry": [
+        {
+          "ErrorEquals": ["Lambda.ServiceException", "Lambda.TooManyRequestsException"],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
+      "Next": "CaseClosed"
+    },
+
+    "CaseClosed": {
+      "Comment": "Terminal success state. Rejection is a valid outcome — not a failure.",
+      "Type": "Succeed"
+    }
+
+  }
+}
