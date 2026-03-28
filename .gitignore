@@ -4,3 +4,5 @@ screen-demo-video.mp4
 *.mp4
 civicguardian-ai/.aws-sam/
 .aws-sam/
+.DS_Store
+**/.DS_Store
