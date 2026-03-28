@@ -2,3 +2,5 @@
 civicguardian-demo-final.mp4
 screen-demo-video.mp4
 *.mp4
+civicguardian-ai/.aws-sam/
+.aws-sam/
