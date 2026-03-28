@@ -324,6 +324,9 @@ Resources:
                 Action: [s3:PutObject, s3:CopyObject]
                 Resource: !Sub arn:aws:s3:::civicguardian-processed/*
               - Effect: Allow
+                Action: [s3:PutObject]
+                Resource: !Sub arn:aws:s3:::civicguardian-inbox/uploads/*
+              - Effect: Allow
                 Action: [cloudwatch:PutMetricData]
                 Resource: '*'
                 Condition:
@@ -652,17 +655,156 @@ Resources:
       ResourceId: !Ref ApiPresignResource
       HttpMethod: GET
       AuthorizationType: NONE
-      ApiKeyRequired: true
+      ApiKeyRequired: false
       Integration:
         Type: AWS_PROXY
         IntegrationHttpMethod: POST
         Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${EscalationFunction.Arn}/invocations
 
-  ApiDeployment:
-    Type: AWS::ApiGateway::Deployment
-    DependsOn: [ApiApproveMethod, ApiRejectMethod, ApiPresignMethod]
+  # CORS preflight for /presign
+  ApiPresignOptionsMethod:
+    Type: AWS::ApiGateway::Method
     Properties:
       RestApiId: !Ref CivicGuardianApi
+      ResourceId: !Ref ApiPresignResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      ApiKeyRequired: false
+      Integration:
+        Type: MOCK
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+            ResponseTemplates:
+              application/json: ''
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+
+# ════════════════════════════════════════════════════════════════════════════
+# STATUS HANDLER — GET /status/{fileKey}
+# ════════════════════════════════════════════════════════════════════════════
+
+  StatusHandlerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub civicguardian-status-role-${AWS::StackName}
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
+      Policies:
+        - PolicyName: StatusHandlerPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: [dynamodb:Scan]
+                Resource: !GetAtt CivicGuardianCasesTable.Arn
+
+  StatusHandlerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: civicguardian-status-handler
+      CodeUri: ../lambdas/status_handler/
+      Handler: handler.lambda_handler
+      MemorySize: 128
+      Timeout: 10
+      Role: !GetAtt StatusHandlerRole.Arn
+
+  # /status resource
+  ApiStatusResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref CivicGuardianApi
+      ParentId: !GetAtt CivicGuardianApi.RootResourceId
+      PathPart: status
+
+  # /status/{fileKey} resource
+  ApiStatusFileKeyResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref CivicGuardianApi
+      ParentId: !Ref ApiStatusResource
+      PathPart: '{fileKey}'
+
+  ApiStatusMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref CivicGuardianApi
+      ResourceId: !Ref ApiStatusFileKeyResource
+      HttpMethod: GET
+      AuthorizationType: NONE
+      ApiKeyRequired: false
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${StatusHandlerFunction.Arn}/invocations
+
+  # CORS preflight for /status/{fileKey}
+  ApiStatusOptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref CivicGuardianApi
+      ResourceId: !Ref ApiStatusFileKeyResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      ApiKeyRequired: false
+      Integration:
+        Type: MOCK
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+            ResponseTemplates:
+              application/json: ''
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+
+  StatusHandlerApiPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt StatusHandlerFunction.Arn
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${CivicGuardianApi}/*/GET/status/*
+
+  ApiDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+      - ApiApproveMethod
+      - ApiRejectMethod
+      - ApiPresignMethod
+      - ApiPresignOptionsMethod
+      - ApiStatusMethod
+      - ApiStatusOptionsMethod
+      - GatewayResponseDefault4XX
+      - GatewayResponseDefault5XX
+    Properties:
+      RestApiId: !Ref CivicGuardianApi
+      Description: "Force redeploy - presign ApiKeyRequired removed, CORS GatewayResponses added"
 
   ApiStage:
     Type: AWS::ApiGateway::Stage
@@ -767,6 +909,12 @@ Resources:
       LogGroupName: /aws/lambda/civicguardian-escalation
       RetentionInDays: 30
 
+  StatusHandlerLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /aws/lambda/civicguardian-status-handler
+      RetentionInDays: 30
+
   NovaProInvocationsAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
@@ -857,6 +1005,53 @@ Resources:
             }
           ]
         }
+
+# ════════════════════════════════════════════════════════════════════════════
+# API GATEWAY — CORS Gateway Responses (covers 4XX/5XX errors + auth failures)
+# Without these, error responses from API GW itself (e.g. 403 Missing Auth,
+# 429 Throttle) are returned without CORS headers, causing "Load failed" in
+# the browser even when the OPTIONS preflight succeeds.
+# ════════════════════════════════════════════════════════════════════════════
+
+  GatewayResponseDefault4XX:
+    Type: AWS::ApiGateway::GatewayResponse
+    Properties:
+      RestApiId: !Ref CivicGuardianApi
+      ResponseType: DEFAULT_4XX
+      ResponseParameters:
+        gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
+        gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key'"
+        gatewayresponse.header.Access-Control-Allow-Methods: "'GET,POST,OPTIONS'"
+
+  GatewayResponseDefault5XX:
+    Type: AWS::ApiGateway::GatewayResponse
+    Properties:
+      RestApiId: !Ref CivicGuardianApi
+      ResponseType: DEFAULT_5XX
+      ResponseParameters:
+        gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
+        gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key'"
+        gatewayresponse.header.Access-Control-Allow-Methods: "'GET,POST,OPTIONS'"
+
+  GatewayResponseUnauthorized:
+    Type: AWS::ApiGateway::GatewayResponse
+    Properties:
+      RestApiId: !Ref CivicGuardianApi
+      ResponseType: UNAUTHORIZED
+      ResponseParameters:
+        gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
+        gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key'"
+        gatewayresponse.header.Access-Control-Allow-Methods: "'GET,POST,OPTIONS'"
+
+  GatewayResponseAccessDenied:
+    Type: AWS::ApiGateway::GatewayResponse
+    Properties:
+      RestApiId: !Ref CivicGuardianApi
+      ResponseType: ACCESS_DENIED
+      ResponseParameters:
+        gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
+        gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key'"
+        gatewayresponse.header.Access-Control-Allow-Methods: "'GET,POST,OPTIONS'"
 
 # ════════════════════════════════════════════════════════════════════════════
 # OUTPUTS

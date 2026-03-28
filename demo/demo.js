@@ -1,6 +1,13 @@
 // CivicGuardian AI - Demo Interface JavaScript
 
-// Mock data from actual sample outputs
+// ── API config ────────────────────────────────────────────────────────────────
+const API_BASE = 'https://2w6h0znfwj.execute-api.eu-west-2.amazonaws.com/prod';
+const POLL_INITIAL_DELAY_MS = 5000;   // wait 5s before first poll (ingest takes time)
+const POLL_INTERVAL_MS = 5000;        // poll every 5s
+const POLL_TIMEOUT_MS = 180000;       // 3 minute total timeout
+const TERMINAL_STATUSES = ['RISK_ASSESSED', 'GOVERNOR_VALIDATED', 'AWAITING_APPROVAL', 'APPROVED', 'REJECTED', 'ARCHIVED'];
+
+// Fallback mock data (used only when API call fails)
 const mockRiskAnalysis = {
     case_id: "demo-001",
     risk_level: "HIGH",
@@ -160,44 +167,159 @@ function formatFileSize(bytes) {
     return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
 }
 
-// Analysis simulation with thinking stream
-function analyzeDocument() {
+// Real API-backed analysis
+async function analyzeDocument() {
+    // Determine what we're analysing — real file or sample text
+    const previewFilename = document.getElementById('previewFilename').textContent;
+    const previewContent = document.getElementById('previewContent').textContent;
+    const isSample = (previewFilename === 'sample-letter.txt');
+
     // Show loading state
     analyzeBtn.disabled = true;
     document.getElementById('analyzeBtnText').textContent = 'Analysing...';
     document.getElementById('analyzeBtnSpinner').style.display = 'inline-block';
-    
-    // Show thinking stream section
+
+    // Show thinking stream
     thinkingStreamSection.style.display = 'block';
     thinkingStreamSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    
-    // Simulate thinking stream
-    const thinkingSteps = [
-        { delay: 200, message: '[INIT] Document ingestion started...' },
-        { delay: 500, message: '[EXTRACT] Parsing text content from uploaded file...' },
-        { delay: 800, message: '[DETECT] Identified sender: Oxford City Council Housing Department' },
-        { delay: 1200, message: '[ANALYZE] Extracting deadline: 28 February 2026' },
-        { delay: 1500, message: '[BEDROCK] Invoking Risk Analyst Agent (Nova Lite)...' },
-        { delay: 1800, message: '[RISK] Risk level: HIGH | Confidence: 87%' },
-        { delay: 2100, message: '[BEDROCK] Invoking Policy Reasoner Agent (Nova Pro)...' },
-        { delay: 2400, message: '[DRAFT] Generating response based on Housing Benefit Regulations 2006...' },
-        { delay: 2700, message: '[VALIDATE] Running Governor validation checks...' },
-        { delay: 3000, message: '[COMPLETE] Analysis complete. Displaying results...' }
-    ];
-    
-    thinkingSteps.forEach(step => {
-        setTimeout(() => streamThought(step.message), step.delay);
-    });
-    
-    // Show results after thinking stream completes
-    setTimeout(() => {
-        displayResults();
-        
-        // Reset button state
+
+    try {
+        let fileToUpload;
+
+        if (isSample) {
+            // Wrap sample text as a Blob so we can upload it
+            fileToUpload = new File([sampleLetterText], 'sample-letter.txt', { type: 'text/plain' });
+        } else {
+            // Re-read the actual file from the input
+            fileToUpload = fileInput.files[0];
+            if (!fileToUpload) {
+                // Fallback: wrap preview content as text
+                fileToUpload = new File([previewContent], previewFilename, { type: 'text/plain' });
+            }
+        }
+
+        // ── STEP 1: Get presigned upload URL ─────────────────────────────────
+        streamThought('[INIT] Requesting secure upload URL...');
+        const presignUrl = `${API_BASE}/presign?filename=${encodeURIComponent(fileToUpload.name)}&type=${encodeURIComponent(fileToUpload.type || 'text/plain')}`;
+        const presignResp = await fetch(presignUrl);
+        if (!presignResp.ok) throw new Error(`Presign failed: ${presignResp.status}`);
+        const { uploadUrl, fileKey } = await presignResp.json();
+        streamThought(`[INIT] Upload URL obtained. File key: ${fileKey}`);
+
+        // ── STEP 2: Upload file directly to S3 ───────────────────────────────
+        streamThought('[UPLOAD] Uploading document to secure storage...');
+        const uploadResp = await fetch(uploadUrl, {
+            method: 'PUT',
+            headers: { 'Content-Type': fileToUpload.type || 'text/plain' },
+            body: fileToUpload,
+        });
+        if (!uploadResp.ok) throw new Error(`S3 upload failed: ${uploadResp.status}`);
+        streamThought('[UPLOAD] Document uploaded successfully.');
+
+        // ── STEP 3: Poll for results ──────────────────────────────────────────
+        streamThought('[PROCESS] Starting AI analysis pipeline...');
+        const result = await pollForResult(fileKey);
+
+        // ── STEP 4: Display real results ──────────────────────────────────────
+        streamThought('[COMPLETE] Analysis complete. Displaying results...');
+        displayResults(result);
+
+    } catch (err) {
+        console.error('Analysis error:', err);
+        streamThought(`[ERROR] ${err.message}`);
+        showAnalysisError(err.message);
+    } finally {
         analyzeBtn.disabled = false;
         document.getElementById('analyzeBtnText').textContent = 'Analyze Document';
         document.getElementById('analyzeBtnSpinner').style.display = 'none';
-    }, 3200);
+    }
+}
+
+async function pollForResult(fileKey) {
+    // URL-encode the fileKey so the slash in uploads/filename is preserved
+    // Use encodeURIComponent which encodes / as %2F — API Gateway will decode it
+    // back via pathParameters, and our handler URL-decodes it before the DB lookup
+    const encodedKey = encodeURIComponent(fileKey);
+    const statusUrl = `${API_BASE}/status/${encodedKey}`;
+    const deadline = Date.now() + POLL_TIMEOUT_MS;
+    let lastStatus = '';
+    let pollCount = 0;
+
+    // Initial delay — give ingest_handler time to write the case to DynamoDB
+    streamThought(`[POLL] Waiting for pipeline to initialise (${POLL_INITIAL_DELAY_MS / 1000}s)...`);
+    await new Promise(r => setTimeout(r, POLL_INITIAL_DELAY_MS));
+
+    while (Date.now() < deadline) {
+        pollCount++;
+        console.log(`[poll #${pollCount}] GET ${statusUrl}`);
+        streamThought(`[POLL] Checking status for ${fileKey} (attempt ${pollCount})...`);
+
+        let resp;
+        try {
+            resp = await fetch(statusUrl);
+        } catch (networkErr) {
+            streamThought(`[POLL] Network error: ${networkErr.message} — retrying...`);
+            await new Promise(r => setTimeout(r, POLL_INTERVAL_MS));
+            continue;
+        }
+
+        if (resp.status === 404) {
+            streamThought('[POLL] Case not yet in database — waiting...');
+            await new Promise(r => setTimeout(r, POLL_INTERVAL_MS));
+            continue;
+        }
+
+        if (!resp.ok) {
+            throw new Error(`Status check failed with HTTP ${resp.status}`);
+        }
+
+        const data = await resp.json();
+        const status = data.status || '';
+
+        console.log(`[poll #${pollCount}] status=${status}`, data);
+
+        if (status !== lastStatus) {
+            lastStatus = status;
+            if (status === 'INGESTING') {
+                streamThought('[INGEST] Document received — extracting text...');
+            } else if (status === 'PROCESSING') {
+                streamThought('[BEDROCK] Invoking Risk Analyst Agent (Nova Lite)...');
+            } else if (status === 'RISK_ASSESSED') {
+                streamThought(`[RISK] Risk level: ${data.risk_level || '?'} | Confidence: ${data.governor_confidence ? Math.round(data.governor_confidence * 100) + '%' : '?'}`);
+                streamThought('[BEDROCK] Invoking Policy Reasoner Agent (Nova Pro)...');
+            } else if (status === 'GOVERNOR_VALIDATED') {
+                streamThought('[VALIDATE] Governor validation complete.');
+            } else if (status === 'AWAITING_APPROVAL') {
+                streamThought('[ESCALATE] Case escalated for caseworker approval.');
+            }
+        }
+
+        if (TERMINAL_STATUSES.includes(status)) {
+            return data;
+        }
+
+        await new Promise(r => setTimeout(r, POLL_INTERVAL_MS));
+    }
+
+    throw new Error('Analysis timed out after 3 minutes. The pipeline may still be running — check DynamoDB directly.');
+}
+
+function showAnalysisError(message) {
+    // Surface the error in the results panel without touching any UI structure
+    visualizationSection.style.display = 'block';
+    draftingSuiteSection.style.display = 'grid';
+
+    const errorHtml = `<p style="color:#ff6b6b;padding:1rem;">
+        ⚠ Analysis failed: ${message}<br>
+        <small>Showing demo data as fallback.</small>
+    </p>`;
+
+    const riskPanel = document.getElementById('riskBadge');
+    if (riskPanel) riskPanel.closest('section, .card, [class]').insertAdjacentHTML('afterbegin', errorHtml);
+
+    // Fall back to mock data so the UI isn't empty
+    displayResults(null);
+    visualizationSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 // Stream a thought to the thinking stream
@@ -220,83 +342,106 @@ function streamThought(message) {
     thinkingStream.scrollTop = thinkingStream.scrollHeight;
 }
 
-function displayResults() {
+function displayResults(apiData) {
     // Show visualization and drafting suite sections
     visualizationSection.style.display = 'block';
     draftingSuiteSection.style.display = 'grid';
-    
-    // Update Risk Scorecard with data
-    const urgency = 85; // HIGH risk = high urgency
-    const complexity = 60; // Medium complexity
-    const confidence = mockRiskAnalysis.confidence * 100;
-    
-    // Calculate deadline countdown
-    const deadline = new Date(mockRiskAnalysis.deadline);
+
+    // Merge real API data over mock fallbacks
+    const riskData = {
+        risk_level:         (apiData && apiData.risk_level)          || mockRiskAnalysis.risk_level,
+        confidence:         (apiData && apiData.governor_confidence)  || mockRiskAnalysis.confidence,
+        deadline:           (apiData && apiData.deadline)             || mockRiskAnalysis.deadline,
+        required_action:    (apiData && apiData.required_action)      || mockRiskAnalysis.required_action,
+        urgency_indicators: (apiData && apiData.urgency_indicators && apiData.urgency_indicators.length)
+                                ? apiData.urgency_indicators
+                                : mockRiskAnalysis.urgency_indicators,
+        sender_authority:   (apiData && apiData.sender_authority)     || mockRiskAnalysis.sender_authority,
+    };
+
+    const policyData = {
+        draft_response:       (apiData && apiData.draft_response)             || mockPolicyResponse.draft_response,
+        rationale_bullets:    (apiData && apiData.rationale_bullets && apiData.rationale_bullets.length)
+                                  ? apiData.rationale_bullets
+                                  : mockPolicyResponse.rationale_bullets,
+        legislation_referenced: (apiData && apiData.legislation_referenced && apiData.legislation_referenced.length)
+                                  ? apiData.legislation_referenced
+                                  : mockPolicyResponse.legislation_referenced,
+    };
+
+    const govData = {
+        validation_status:  (apiData && apiData.status)              || mockGovernorValidation.validation_status,
+        confidence_score:   (apiData && apiData.governor_confidence)  || mockGovernorValidation.confidence_score,
+        required_escalation:(apiData && apiData.required_escalation != null)
+                                ? apiData.required_escalation
+                                : mockGovernorValidation.required_escalation,
+    };
+
+    // Update Risk Scorecard
+    const urgency = riskData.risk_level === 'HIGH' || riskData.risk_level === 'CRITICAL' ? 85 : 45;
+    const complexity = 60;
+    const confidence = riskData.confidence * 100;
+
+    const deadline = new Date(riskData.deadline);
     const today = new Date();
     const daysRemaining = Math.ceil((deadline - today) / (1000 * 60 * 60 * 24));
-    
-    // Update Urgency Card
-    document.getElementById('urgencyValue').textContent = 'HIGH';
+
+    document.getElementById('urgencyValue').textContent = riskData.risk_level === 'CRITICAL' ? 'CRITICAL' : 'HIGH';
     document.getElementById('urgencyBar').style.width = urgency + '%';
     document.getElementById('urgencyDetail').textContent = `Deadline within ${daysRemaining} days`;
-    
-    // Update Complexity Card
+
     document.getElementById('complexityValue').textContent = 'MEDIUM';
     document.getElementById('complexityBar').style.width = complexity + '%';
     document.getElementById('complexityDetail').textContent = 'Multi-document review';
-    
-    // Update Confidence Card
+
     document.getElementById('confidenceValue').textContent = Math.round(confidence) + '%';
     document.getElementById('confidenceBar').style.width = confidence + '%';
     document.getElementById('confidenceDetail').textContent = 'High certainty classification';
-    
-    // Update Priority Banner
+
     document.getElementById('deadlineCountdown').textContent = `${daysRemaining} days remaining`;
-    
+
     // Populate Risk Assessment
-    document.getElementById('riskBadge').textContent = mockRiskAnalysis.risk_level;
-    document.getElementById('riskLevel').textContent = mockRiskAnalysis.risk_level;
-    document.getElementById('riskConfidence').textContent = (mockRiskAnalysis.confidence * 100).toFixed(0) + '%';
-    document.getElementById('deadline').textContent = formatDate(mockRiskAnalysis.deadline);
-    document.getElementById('requiredAction').textContent = mockRiskAnalysis.required_action;
-    
+    document.getElementById('riskBadge').textContent = riskData.risk_level;
+    document.getElementById('riskLevel').textContent = riskData.risk_level;
+    document.getElementById('riskConfidence').textContent = (riskData.confidence * 100).toFixed(0) + '%';
+    document.getElementById('deadline').textContent = formatDate(riskData.deadline);
+    document.getElementById('requiredAction').textContent = riskData.required_action;
+
     const urgencyList = document.getElementById('urgencyIndicators');
     urgencyList.innerHTML = '';
-    mockRiskAnalysis.urgency_indicators.forEach(indicator => {
+    riskData.urgency_indicators.forEach(indicator => {
         const li = document.createElement('li');
         li.textContent = indicator;
         urgencyList.appendChild(li);
     });
-    
+
     // Populate Draft Response
-    document.getElementById('draftText').textContent = mockPolicyResponse.draft_response;
-    
+    document.getElementById('draftText').textContent = policyData.draft_response;
+
     const rationaleList = document.getElementById('rationaleList');
     rationaleList.innerHTML = '';
-    mockPolicyResponse.rationale_bullets.forEach(bullet => {
+    policyData.rationale_bullets.forEach(bullet => {
         const li = document.createElement('li');
         li.textContent = bullet;
         rationaleList.appendChild(li);
     });
-    
+
     const legislationList = document.getElementById('legislationList');
     legislationList.innerHTML = '';
-    mockPolicyResponse.legislation_referenced.forEach(law => {
+    policyData.legislation_referenced.forEach(law => {
         const li = document.createElement('li');
         li.textContent = law;
         legislationList.appendChild(li);
     });
-    
+
     // Populate Validation
-    document.getElementById('validationBadge').textContent = mockGovernorValidation.validation_status;
-    document.getElementById('validationStatus').textContent = mockGovernorValidation.validation_status;
-    document.getElementById('validationConfidence').textContent = (mockGovernorValidation.confidence_score * 100).toFixed(0) + '%';
-    
-    // Show/hide escalation notice
-    document.getElementById('escalationNotice').style.display = 
-        mockGovernorValidation.required_escalation ? 'block' : 'none';
-    
-    // Scroll to visualization
+    document.getElementById('validationBadge').textContent = govData.validation_status;
+    document.getElementById('validationStatus').textContent = govData.validation_status;
+    document.getElementById('validationConfidence').textContent = (govData.confidence_score * 100).toFixed(0) + '%';
+
+    document.getElementById('escalationNotice').style.display =
+        govData.required_escalation ? 'block' : 'none';
+
     visualizationSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
